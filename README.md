@@ -4,6 +4,14 @@ The standard library for the [Ocean programming language](https://ocean-lang.dev
 Use this source tree with the matching `ocean-c` compiler (`OCEAN_SRC` selects it).
 It is loaded as Ocean source; do not precompile it.
 
+Nightly releases are coordinated by `ocean-c` every day at 00:00 UTC using both
+repositories' `main` commits. A change in either repository creates matching
+`nightly-YYYY.MM.DD` tags and builds the release. Unchanged sources skip builds
+until 30 days have passed since the last published nightly. There is no nightly
+branch; install the stdlib tag matching the compiler release, rather than mixing
+arbitrary revisions. The compiler repository's dedicated deploy key writes the
+stdlib tag; this repository does not run a second nightly scheduler.
+
 `io` has no `extern` declarations. Its public printing and formatting functions
 keep their existing signatures. Stdout is implemented with platform assembly:
 

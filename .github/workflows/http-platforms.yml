@@ -4,6 +4,7 @@ on:
   pull_request:
     paths: ['mem/**', 'net/http/**', 'time/**', 'os/exec/**', 'encoding/json/**', '.github/workflows/http-platforms.yml', '.github/scripts/**']
   push:
+    branches: ['**'] # Snapshot tags are verified by the compiler release workflow.
     paths: ['mem/**', 'net/http/**', 'time/**', 'os/exec/**', 'encoding/json/**', '.github/workflows/http-platforms.yml', '.github/scripts/**']
   workflow_dispatch:
     inputs:
