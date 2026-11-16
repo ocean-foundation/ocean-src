@@ -6,7 +6,8 @@ It is loaded as Ocean source; do not precompile it.
 
 Nightly releases are coordinated by `ocean-c` every day at 00:00 UTC using both
 repositories' `main` commits. A change in either repository creates matching
-`nightly-YYYY.MM.DD` tags and builds the release. Unchanged sources skip builds
+`nightly-YYYY.MM.DD` tags dated for the preceding UTC day and builds the release
+(for example, the December 1 run is named for November 30). Unchanged sources skip builds
 until 30 days have passed since the last published nightly. There is no nightly
 branch; install the stdlib tag matching the compiler release, rather than mixing
 arbitrary revisions. The compiler repository's dedicated deploy key writes the
