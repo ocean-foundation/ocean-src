@@ -13,6 +13,10 @@ func (model counter) Update(message tui.Msg) (tui.Model, tui.Cmd) {
             if (event.Key == "ctrl+c" || event.Text == "q") return model, tui.Quit;
             if (event.Key == "up" || event.Text == "+") model.count++;
             if (event.Key == "down" || event.Text == "-") model.count--;
+        case tui.MouseMsg:
+            if (event.Action == "press" && event.Button == "left") model.count++;
+            if (event.Action == "scroll" && event.Button == "up") model.count++;
+            if (event.Action == "scroll" && event.Button == "down") model.count--;
         case tickMsg:
             model.count++;
             return model, tui.Tick(time.Second, tickMsg{});
@@ -21,9 +25,9 @@ func (model counter) Update(message tui.Msg) (tui.Model, tui.Cmd) {
     return model, tui.NoCmd;
 }
 func (model counter) View() string {
-    return "Count: " + io.Sprint(model.count) + "\n↑/↓ or +/- to change · q to quit";
+    return "Count: " + io.Sprint(model.count) + "\n↑/↓, +/-, click or scroll to change · q to quit";
 }
 func main() {
-    program := tui.NewProgram(counter{}, tui.Options{AltScreen: true});
+    program := tui.NewProgram(counter{}, tui.Options{AltScreen: true, Mouse: true});
     program.Run().unwrap();
 }

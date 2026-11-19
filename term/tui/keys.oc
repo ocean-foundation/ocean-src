@@ -75,7 +75,9 @@ func (decoder *keyDecoder) dispatch(program *Program, end bool) {
                 if (length == 0) length = len(decoder.pending);
                 decoder.take(1);
                 sequence := decoder.take(length - 1);
-                program.Send(KeyMsg{special(sequence), "", false});
+                event, isMouse := mouse(sequence);
+                if (isMouse) program.Send(event);
+                else program.Send(KeyMsg{special(sequence), "", false});
                 continue;
             }
             alt = true; offset = 1;

@@ -8,6 +8,9 @@ type Cmd = func() Msg;
 struct NoneMsg {}
 struct QuitMsg {}
 struct KeyMsg { Key string; Text string; Alt bool; }
+// Button: left/middle/right/none, or up/down/left/right for scroll.
+// Action: press/release/motion/scroll. Coordinates are zero-based terminal cells.
+struct MouseMsg { X int; Y int; Button string; Action string; Shift bool; Alt bool; Ctrl bool; }
 struct WindowSizeMsg { Width int; Height int; }
 struct EOFMsg {}
 struct ErrorMsg { Error string; }

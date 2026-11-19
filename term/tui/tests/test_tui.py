@@ -30,16 +30,21 @@ def terminal(executable, mode):
     received = b""
 
     def expect(text):
-        nonlocal received
+        nonlocal received, setup_bytes
         deadline = time.monotonic() + 8
         while text not in received:
             assert time.monotonic() < deadline, (text, received, process.poll())
             if select.select([master], [], [], 0.1)[0]:
                 received += os.read(master, 65536)
+        setup_bytes = received
         received = b""
 
+    setup_bytes = b""
     try:
         expect(b"VIEW:80\r\nready")
+        # Setup precedes the first rendered frame.
+        if mode != "inline":
+            assert b"\x1b[?1006h\x1b[?1002h" in setup_bytes
         assert not termios.tcgetattr(slave)[3] & (termios.ECHO | termios.ICANON)
         if mode == "panic":
             os.write(master, b"x")
@@ -59,6 +64,11 @@ def terminal(executable, mode):
             expect(b"VIEW:191")
             os.write(master, b"\x1bx")
             expect(b"VIEW:1201")
+            if mode != "inline":
+                os.write(master, b"\x1b[<28;10;")
+                time.sleep(0.01)
+                os.write(master, b"5M")
+                expect(b"VIEW:3201")
             fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 100, 0, 0))
             expect(b"VIEW:100")
             os.write(master, b"q")
@@ -70,6 +80,7 @@ def terminal(executable, mode):
         assert b"\x1b[?25h" in received, received
         if mode != "inline":
             assert b"\x1b[?1049l" in received, received
+            assert b"\x1b[?1002l\x1b[?1006l" in received, received
     finally:
         if process.poll() is None:
             process.kill()

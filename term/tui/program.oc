@@ -17,6 +17,8 @@ struct Options {
     Headless bool;
     // Alternate screen is opt-in. The default redraws from the current line.
     AltScreen bool;
+    // Enable button, wheel, and drag reports using SGR terminal mouse input.
+    Mouse bool;
 }
 struct commandFailure { error string; }
 struct Program {
@@ -116,6 +118,7 @@ func (program *Program) finish() {
 }
 
 func restore(input os.File) { term.Restore(input).unwrap(); }
+func leaveMouse(output os.File) { output.Write("\x1b[?1002l\x1b[?1006l").unwrap(); }
 func leaveScreen(output os.File, alternate bool) {
     output.Write(alternate ? "\x1b[?25h\x1b[?1049l" : "\x1b[?25h\r\n").unwrap();
 }
@@ -159,6 +162,11 @@ func (program *Program) Run() Result<Model> {
         defer leaveScreen(output, program.options.AltScreen);
         entered := output.Write(program.options.AltScreen ? "\x1b[?1049h\x1b[?25l\x1b[H\x1b[2J" : "\x1b[?25l");
         if (entered == Result<int>.error) return Result<Model>.error(entered.(Result<int>.error));
+        if (program.options.Mouse) {
+            defer leaveMouse(output);
+            enabledMouse := output.Write("\x1b[?1006h\x1b[?1002h");
+            if (enabledMouse == Result<int>.error) return Result<Model>.error(enabledMouse.(Result<int>.error));
+        }
         program.Send(WindowSizeMsg{size.Width, size.Height});
     }
     // The owning slot also releases replaced model snapshots between updates.
