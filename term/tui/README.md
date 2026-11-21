@@ -171,6 +171,14 @@ SGR reports are buffered across reads. Unsupported or malformed reports produce
 an `unknown` key. Extra mouse buttons and legacy X10 reports are unsupported.
 
 Sizing is polled approximately every 100ms, without installing signal handlers.
+Alternate-screen views repaint only changed styled rows. Resizing forces a full
+repaint; shorter rows and removed rows clear their stale content after painting.
+Inline views repaint from their original anchor, also erasing stale content after
+painting. Neither path clears the viewport before painting a replacement frame.
+Each update is wrapped in synchronized output mode 2026 so terminals that support
+it can display the frame atomically; other terminals still benefit from reduced
+painting. Normal exit and error cleanup disable synchronized output.
+
 Views redraw when changed or resized, clear stale content, translate newlines
 to CRLF, and accept SGR color/style escapes. Other control characters are
 filtered. The viewport clips excess lines and columns, reserving the last

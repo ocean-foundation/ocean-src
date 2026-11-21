@@ -120,7 +120,7 @@ func (program *Program) finish() {
 func restore(input os.File) { term.Restore(input).unwrap(); }
 func leaveMouse(output os.File) { output.Write("\x1b[?1002l\x1b[?1006l").unwrap(); }
 func leaveScreen(output os.File, alternate bool) {
-    output.Write(alternate ? "\x1b[?25h\x1b[?1049l" : "\x1b[?25h\r\n").unwrap();
+    output.Write("\x1b[?2026l"+(alternate ? "\x1b[?25h\x1b[?1049l" : "\x1b[?25h\r\n")).unwrap();
 }
 // Run is single-use. Init, Update, and View run serially on the calling thread.
 // All workers are cancelled and joined before returning or unwinding a panic.
@@ -200,7 +200,7 @@ func (program *Program) Run() Result<Model> {
         if (dirty && !program.options.Headless) {
             view := state[0].View();
             if (view != lastView[0] || forcePaint) {
-                painted := render(output, view, rows, program.options.AltScreen, size);
+                painted := render(output, view, lastView[0], rows, program.options.AltScreen, size, forcePaint);
                 if (painted == Result<int>.error) return Result<Model>.error(painted.(Result<int>.error));
                 rows = painted.unwrap(); lastView[0] = view;
                 forcePaint = false;

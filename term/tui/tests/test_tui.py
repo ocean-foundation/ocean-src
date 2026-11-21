@@ -41,7 +41,8 @@ def terminal(executable, mode):
 
     setup_bytes = b""
     try:
-        expect(b"VIEW:80\r\nready")
+        expect(b"ready")
+        assert b"VIEW:80" in setup_bytes
         # Setup precedes the first rendered frame.
         if mode != "inline":
             assert b"\x1b[?1006h\x1b[?1002h" in setup_bytes

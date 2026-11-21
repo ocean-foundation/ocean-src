@@ -2,6 +2,7 @@ package tui;
 
 import "os";
 import "term";
+import "io";
 
 // Terminal column approximation for common combining and East Asian scalars.
 // Grapheme clustering and emoji ZWJ composition are not implemented.
@@ -71,12 +72,65 @@ func frame(view string, size term.Size) (string, int) {
     result[used] = 27; result[used+1] = 91; result[used+2] = 48; result[used+3] = 109; used += 4;
     return storage[:used] -> string, row;
 }
-func render(output os.File, view string, previousRows int, alternate bool, size term.Size) Result<int> {
-    prefix := "\r";
-    if (alternate) prefix = "\x1b[H";
-    else for (i := 0; i < previousRows; i++) prefix += "\x1b[1A";
-    text, rows := frame(view, size);
-    written := output.Write(prefix + "\x1b[0m\x1b[J" + text);
-    if (written == Result<int>.error) return Result<int>.error(written.(Result<int>.error));
+// Make each row self-contained, retaining inherited SGR styles across newlines.
+// Comparing plain row bytes alone would miss a color changed on an earlier row.
+func styledLines(text string) string[] {
+    result := string[]{};
+    storage := text -> i8[]; source := storage.data;
+    active := ""; initial := ""; start := 0;
+    for (i := 0; i < len(text);) {
+        if (source[i] == 27 && i+1 < len(text) && source[i+1] == 91) {
+            end := i+2;
+            for (; end < len(text) && source[end] != 109; end++) {}
+            if (end < len(text)) {
+                sequence := text[i:end+1];
+                if (sequence == "\x1b[0m" || sequence == "\x1b[m") active = "";
+                else active += sequence;
+                i = end+1; continue;
+            }
+        }
+        if (source[i] == 10) {
+            end := i > start && source[i-1] == 13 ? i-1 : i;
+            result.append("\x1b[0m"+initial+text[start:end]+"\x1b[0m");
+            start = i+1; initial = active;
+        }
+        i++;
+    }
+    result.append("\x1b[0m"+initial+text[start:]+"\x1b[0m");
+    return result;
+}
+
+// Build a single synchronized write. Paint before erasing trailing content;
+// never blank the viewport before drawing its replacement.
+func paint(view string, previousView string, previousRows int, alternate bool, size term.Size, force bool) (string, int) {
+    text, rows := frame(view,size);
+    if (!alternate) {
+        prefix := "\r";
+        for (i := 0; i < previousRows; i++) prefix += "\x1b[1A";
+        return "\x1b[?2026h"+prefix+"\x1b[0m"+text+"\x1b[0m\x1b[J\x1b[?2026l", rows;
+    }
+    next := styledLines(text);
+    previous := string[]{};
+    if (!force) {
+        old, ignored := frame(previousView,size);
+        previous = styledLines(old);
+    }
+    payload := "";
+    for (i := 0; i < len(next); i++) {
+        if (!force && i < len(previous) && next[i] == previous[i]) continue;
+        payload += "\x1b["+io.Sprint(i+1)+";1H"+next[i]+"\x1b[0m\x1b[K";
+    }
+    // Shrinking views and resizes must erase rows which no longer belong to it.
+    limit := force ? size.Height : previousRows+1;
+    for (i := len(next); i < limit && i < size.Height; i++) payload += "\x1b["+io.Sprint(i+1)+";1H\x1b[0m\x1b[K";
+    if (payload == "") return "",rows;
+    return "\x1b[?2026h"+payload+"\x1b[?2026l",rows;
+}
+func render(output os.File, view string, previousView string, previousRows int, alternate bool, size term.Size, force bool) Result<int> {
+    text, rows := paint(view,previousView,previousRows,alternate,size,force);
+    if (text != "") {
+        written := output.Write(text);
+        if (written == Result<int>.error) return Result<int>.error(written.(Result<int>.error));
+    }
     return Result<int>.value(rows);
 }
