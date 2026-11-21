@@ -13,10 +13,10 @@ age := object["Age"].(json.Number).Int64().unwrap();
 ```
 
 - `Marshal(value any) Result<string>` encodes null, booleans, strings, all integer
-  widths, finite floats, structs, `map[string]any`, `mixed any[]`, and dynamic
-  `string[]`, `int[]`, `float[]`, and `bool[]` arrays. Object keys are sorted.
+  widths, finite floats, structs, `map[string]any`, `mixed []any`, and dynamic
+  `[]string`, `[]int`, `[]float`, and `[]bool` arrays. Object keys are sorted.
 - `Unmarshal(text string) Result<any>` decodes to null, bool, string, `Number`,
-  `mixed any[]`, or `map[string]any`. Duplicate object keys retain the last value.
+  `mixed []any`, or `map[string]any`. Duplicate object keys retain the last value.
 - `Valid(text string) bool` checks an entire JSON document.
 - `Number { Text string }` preserves the original JSON number, including large
   integers and exponents. `Int64() Result<int>` and `Float64() Result<float>`

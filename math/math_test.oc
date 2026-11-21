@@ -17,7 +17,7 @@ struct mathCase {
 func TestPowers(t *testing.T) {
     t.Parallel();
     z := math.Copysign(0.0, -1.0);
-    tests := mathCase[]{
+    tests := []mathCase{
         {"integer", func(t *testing.T) {
             near(t, "integer", math.Pow(2.0, 10.0), 1024.0, 0.0);
         }},
@@ -87,7 +87,7 @@ func TestPowers(t *testing.T) {
 func TestExpAndLog(t *testing.T) {
     t.Parallel();
     tiny := math.Float64frombits(1);
-    tests := mathCase[]{
+    tests := []mathCase{
         {"exp zero", func(t *testing.T) {
             near(t, "exp zero", math.Exp(0.0), 1.0, 0.0);
         }},
@@ -145,7 +145,7 @@ func TestExpAndLog(t *testing.T) {
 func TestTrigonometry(t *testing.T) {
     t.Parallel();
     z := math.Copysign(0.0, -1.0);
-    tests := mathCase[]{
+    tests := []mathCase{
         {"sin", func(t *testing.T) {
             near(t, "sin", math.Sin(math.Pi / 6.0), 0.5, 2e-15);
         }},
@@ -207,7 +207,7 @@ func TestRootsAndHelpers(t *testing.T) {
     tiny := math.Float64frombits(1);
     r := math.Sqrt(tiny);
     z := math.Copysign(0.0, -1.0);
-    tests := mathCase[]{
+    tests := []mathCase{
         {"sqrt", func(t *testing.T) {
             near(t, "sqrt", math.Sqrt(2.0), math.Sqrt2, 2e-15);
         }},
@@ -279,7 +279,7 @@ func TestRootsAndHelpers(t *testing.T) {
 
 func TestReferenceValues(t *testing.T) {
     t.Parallel();
-    tests := mathCase[]{
+    tests := []mathCase{
         {"Sin(-100.0)", func(t *testing.T) {
             near(t, "Sin(-100.0)", math.Sin(-100.0), 0.5063656411097588, 2e-14);
         }},

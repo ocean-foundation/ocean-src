@@ -4,11 +4,11 @@ package tui;
 // terminal coordinates, including when rendering inline below existing output.
 func mouse(sequence string) (MouseMsg, bool) {
     event: MouseMsg;
-    bytes := sequence -> i8[];
+    bytes := sequence -> []i8;
     if (len(bytes) < 8 || bytes[0] != 91 || bytes[1] != 60) return event, false;
     final := bytes[len(bytes)-1];
     if (final != 77 && final != 109) return event, false;
-    values := int[3]{};
+    values := [3]int{};
     field := 0;
     digits := 0;
     for (i := 2; i < len(bytes)-1; i++) {

@@ -53,7 +53,7 @@ func compareParsedDecimal(digits string, exponent int, midpoint string, scale in
 // Base-1e9 limbs and chunked powers avoid digit-by-digit multiplication for
 // extreme exponents. Every intermediate stays below signed 64-bit overflow.
 func parseFloatDecimal(mantissa uint, exponent int) (string, int) {
-    limbs := int[]{};
+    limbs := []int{};
     for (; mantissa > 0; mantissa /= 1000000000) limbs.append((mantissa % 1000000000)->int);
     if (len(limbs) == 0) limbs.append(0);
     negative := exponent < 0;
@@ -75,7 +75,7 @@ func parseFloatDecimal(mantissa uint, exponent int) (string, int) {
         if (carry > 0) limbs.append(carry);
         remaining -= steps;
     }
-    bytes := i8[]{};
+    bytes := []i8{};
     for (i := len(limbs) - 1; i >= 0; i--) {
         part := sprintInt(limbs[i]);
         if (i < len(limbs) - 1) {
@@ -110,7 +110,7 @@ func ParseFloat(text string) Result<float> {
         return Result<float>.value(parseFloatFromBits((9221120237041090560->uint) | sign));
     if (parseFloatWord(text, index, "inf") || parseFloatWord(text, index, "infinity"))
         return Result<float>.value(parseFloatFromBits((9218868437227405312->uint) | sign));
-    bytes := i8[]{};
+    bytes := []i8{};
     point := false;
     fraction := 0;
     for (; index < len(text); index++) {
@@ -153,7 +153,7 @@ func ParseFloat(text string) Result<float> {
     last := len(bytes);
     for (; last > first + 1 && bytes[last - 1] == '0'; last--) {}
     exponent += len(bytes) - last - fraction;
-    significant := i8[]{};
+    significant := []i8{};
     for (i := first; i < last; i++) significant.append(bytes[i]);
     digits := significant -> string;
     take := len(digits) > 17 ? 17 : len(digits);

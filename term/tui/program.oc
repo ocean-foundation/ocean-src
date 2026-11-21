@@ -30,7 +30,7 @@ struct Program {
     messages map[int]Msg;
     head int;
     tail int;
-    workers int[];
+    workers []int;
     running bool;
     finished bool;
 }
@@ -86,7 +86,7 @@ func (program *Program) execute(command Cmd) {
             for (i := 0; i < len(value.commands); i++) program.execute(value.commands[i]);
             return;
         case batchMsg:
-            children := int[]{};
+            children := []int{};
             defer stopWorkers(&children);
             for (i := 0; i < len(value.commands); i++) {
                 child := value.commands[i];
@@ -97,7 +97,7 @@ func (program *Program) execute(command Cmd) {
     }
     program.Send(message);
 }
-func stopWorkers(workers *int[]) {
+func stopWorkers(workers *[]int) {
     for (i := 0; i < len(*workers); i++) threads.Kill((*workers)[i]);
     for (i := 0; i < len(*workers); i++) threads.Await((*workers)[i]);
 }
@@ -214,7 +214,7 @@ func (program *Program) Run() Result<Model> {
                     if (ready == Result<int>.error) return Result<Model>.error(ready.(Result<int>.error));
                     if (ready.unwrap() == 0) break;
                     read := input.Readchunk(1);
-                    if (read == Result<i8[]>.error) return Result<Model>.error(read.(Result<i8[]>.error));
+                    if (read == Result<[]i8>.error) return Result<Model>.error(read.(Result<[]i8>.error));
                     bytes := read.unwrap();
                     if (len(bytes) == 0) { ended = true; break; }
                     else { decoder.pending.append(bytes[0]); decoder.idle = 0; }

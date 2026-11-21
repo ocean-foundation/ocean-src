@@ -105,9 +105,9 @@ func sprintItem(item any) string {
 			return sprintFloat(item.(f32)->float, 2);
 		case bool:
 			return item.(bool) ? "true" : "false";
-		case i8[]:
+		case []i8:
 			str := "[";
-			for (i, value := range item.(i8[])) {
+			for (i, value := range item.([]i8)) {
 				str += (i > 0 ? ", " : "") + sprintInt(value->int);
 			}
 			return str + "]";
@@ -115,9 +115,9 @@ func sprintItem(item any) string {
 			return item.(string);
 		case buffer:
 			return "[buffer]";
-		case mixed any[]:
+		case mixed []any:
 			str := "[";
-			for (i, value := range item.(mixed any[])) {
+			for (i, value := range item.(mixed []any)) {
 				str += (i > 0 ? " " : "") + sprintItem(value);
 			}
 			return str + "]";
@@ -219,7 +219,7 @@ func roundDecimal(digits string, drop int) string {
 
 // Convert IEEE binary64 exactly to a decimal integer and decimal scale.
 func exactFloat(mantissa uint, exponent int) (string, int) {
-    digits := int[]{};
+    digits := []int{};
     for (; mantissa > 0; mantissa /= 10) digits.append((mantissa % 10)->int);
     if (len(digits) == 0) digits.append(0);
     factor := exponent < 0 ? 5 : 2;
@@ -305,7 +305,7 @@ func sprintFloat(x float, decimals int) string {
 
 // Write all bytes, retrying interrupted Unix writes and handling partial writes.
 func writeStdout(text string) Result<int> {
-    bytes := text -> i8[];
+    bytes := text -> []i8;
     offset := 0;
     for (; offset < len(bytes);) {
         data: *void = &bytes[offset];

@@ -1,10 +1,10 @@
 package os;
 
-args: string[];
+args: []string;
 
 func setArgs(stream buffer<i8>, argc int) {
-    arr := string[]{};
-    chars: i8[] = {};
+    arr := []string{};
+    chars: []i8 = {};
     count := 0;
     c: i8;
     for (i := 0; count < argc; i++) {

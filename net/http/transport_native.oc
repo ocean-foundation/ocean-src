@@ -72,8 +72,8 @@ func exchange(client Client, request Request, wire string, deadline int) Result<
     easy := extern.curl_easy_init();
     if ((easy -> int) == 0) return Result<Response>.error("http: transport allocation failed");
     defer extern.curl_easy_cleanup(easy);
-    url := (request.URL + "\0") -> i8[];
-    ca := (client.TLSClientConfig.RootCAFile + "\0") -> i8[];
+    url := (request.URL + "\0") -> []i8;
+    ca := (client.TLSClientConfig.RootCAFile + "\0") -> []i8;
     if (index(client.TLSClientConfig.RootCAFile, "\0") >= 0) return Result<Response>.error("http: root CA path contains NUL");
     if (extern.curl_easy_setopt(easy, optURL, url.data) != 0 ||
         extern.curl_easy_setopt(easy, optProxy, "\0".data) != 0 ||
@@ -121,7 +121,7 @@ func exchange(client Client, request Request, wire string, deadline int) Result<
     for (segment := 0; segment < 2; segment++) {
         reason = interruption(request.Cancel, deadline);
         if (reason != "") return Result<Response>.error(reason);
-        bytes := (segment == 0 ? wire : request.Body) -> i8[]; sent := 0;
+        bytes := (segment == 0 ? wire : request.Body) -> []i8; sent := 0;
         for (sent < len(bytes)) {
             reason = interruption(request.Cancel, deadline);
             if (reason != "") return Result<Response>.error(reason);
@@ -137,7 +137,7 @@ func exchange(client Client, request Request, wire string, deadline int) Result<
         }
     }
     limit := client.MaxResponseBytes > 0 ? client.MaxResponseBytes : 16777216;
-    output := i8[]{}; chunk: i8[16384];
+    output := []i8{}; chunk: [16384]i8;
     for (;;) {
         reason = interruption(request.Cancel, deadline);
         if (reason != "") return Result<Response>.error(reason);

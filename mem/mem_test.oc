@@ -9,7 +9,7 @@ struct copyTest { name string; src, dest, count int; }
 func TestCopyRegions(t *testing.T) {
     t.Parallel();
     // Generate a table covering all overlaps, equal pointers and adjacency.
-    tests := make(copyTest[]);
+    tests := make([]copyTest);
     for (src := 0; src < 8; src++) {
         for (dest := 0; dest < 8; dest++) {
             for (count := 0; count <= 8 - src && count <= 8 - dest; count++) {
@@ -21,7 +21,7 @@ func TestCopyRegions(t *testing.T) {
     for (_, test := range tests) {
         t.Run(test.name, func(t *testing.T) {
             t.Parallel();
-            data: u8[8] = {0, 1, 127, 128, 254, 255, 6, 7};
+            data: [8]u8 = {0, 1, 127, 128, 254, 255, 6, 7};
             original := data;
             mem.Copy(&data[test.src], &data[test.dest], test.count);
             for (i := 0; i < 8; i++) {
@@ -37,16 +37,16 @@ func TestCopyRegions(t *testing.T) {
 
 func TestCopySeparateStorage(t *testing.T) {
     t.Parallel();
-    source: u8[4] = {0, 128, 255, 42};
-    dest: u8[6] = {9, 9, 9, 9, 9, 9};
+    source: [4]u8 = {0, 128, 255, 42};
+    dest: [6]u8 = {9, 9, 9, 9, 9, 9};
     mem.Copy(source.data, &dest[1], source.size);
-    expected: u8[6] = {9, 0, 128, 255, 42, 9};
+    expected: [6]u8 = {9, 0, 128, 255, 42, 9};
     for (i := 0; i < 6; i++) {
         if (dest[i] != expected[i])
             t.Fatalf("destination byte {}: wanted {}, got {}; copied {} bytes", i, expected[i], dest[i], source.size);
     }
-    if (dest != u8[6]{9, 0, 128, 255, 42, 9}) t.Fatal("destination bytes match, but fixed-array equality failed");
-    if (source != u8[4]{0, 128, 255, 42}) t.Fatal("source changed");
+    if (dest != [6]u8{9, 0, 128, 255, 42, 9}) t.Fatal("destination bytes match, but fixed-array equality failed");
+    if (source != [4]u8{0, 128, 255, 42}) t.Fatal("source changed");
 }
 
 func TestCopyZero(t *testing.T) {

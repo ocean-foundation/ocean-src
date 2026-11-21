@@ -9,10 +9,10 @@ import "io";
 // assertions live in Ocean tests; the Python launcher just owns local servers.
 extern buffer<i8> getenv(buffer<i8> name);
 func fixtureEnv(name string) string {
-    key := (name + "\0") -> i8[];
+    key := (name + "\0") -> []i8;
     raw := extern.getenv(key.data);
     if ((raw -> int) == 0) return "";
-    bytes := i8[]{};
+    bytes := []i8{};
     for (i := 0; raw[i] != 0; i++) bytes.append(raw[i]);
     return bytes -> string;
 }
@@ -147,7 +147,7 @@ func TestHTTPTruncatedResponse(t *testing.T) {
 }
 func TestHTTPConcurrentRequests(t *testing.T) {
     url := fixture(t, "CONCURRENT"); scale := fixtureScale();
-    results: bool[4]; workers := int[]{};
+    results: [4]bool; workers := []int{};
     for (i := 0; i < 4; i++) {
         slot := i;
         worker := threads.Spawn(func() {

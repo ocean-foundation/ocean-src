@@ -3,8 +3,8 @@ package tui;
 import "testing";
 
 func TestMouseReports(t *testing.T) {
-    sequences := string[]{"[<0;1;1M", "[<30;81;25m", "[<32;4;5M", "[<35;4;5M", "[<64;10;20M", "[<65;10;20M", "[<66;10;20M", "[<67;10;20M"};
-    expected := MouseMsg[]{
+    sequences := []string{"[<0;1;1M", "[<30;81;25m", "[<32;4;5M", "[<35;4;5M", "[<64;10;20M", "[<65;10;20M", "[<66;10;20M", "[<67;10;20M"};
+    expected := []MouseMsg{
         {0,0,"left","press",false,false,false},
         {80,24,"right","release",true,true,true},
         {3,4,"left","motion",false,false,false},
@@ -18,7 +18,7 @@ func TestMouseReports(t *testing.T) {
         event, ok := mouse(sequence);
         if (!ok || event != expected[i]) t.Errorf("incorrect mouse report: {}", sequence);
     }
-    invalid := string[]{"[A", "[<0;0;1M", "[<0;1;0M", "[<;1;1M", "[<0;1;1;1M", "[<0;1M", "[<0;1;1X", "[<999999999999999999;1;1M", "[<128;1;1M"};
+    invalid := []string{"[A", "[<0;0;1M", "[<0;1;0M", "[<;1;1M", "[<0;1;1;1M", "[<0;1M", "[<0;1;1X", "[<999999999999999999;1;1M", "[<128;1;1M"};
     for (_, sequence := range invalid) {
         _, ok := mouse(sequence);
         if (ok) t.Errorf("accepted invalid mouse report: {}", sequence);
@@ -28,7 +28,7 @@ func TestMouseReports(t *testing.T) {
 func TestSplitMouseInput(t *testing.T) {
     // Every possible read boundary must preserve the entire mouse report and
     // the following key, without leaking report digits as application keys.
-    input := "\x1b[<20;301;42Mq" -> i8[];
+    input := "\x1b[<20;301;42Mq" -> []i8;
     for (split := 1; split < len(input); split++) {
         program: Program;
         decoder := keyDecoder{pending: input[:split]};

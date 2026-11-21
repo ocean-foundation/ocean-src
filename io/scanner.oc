@@ -1,10 +1,10 @@
 package io;
 import "os";
 
-struct ScanResult { Bytes i8[]; End bool; }
+struct ScanResult { Bytes []i8; End bool; }
 struct Scanner {
     source os.File;
-    bytes i8[];
+    bytes []i8;
     position int;
     ended bool;
     version int;
@@ -13,7 +13,7 @@ struct Scanner {
 func NewScanner(source os.File) Scanner {
     if (!source.CanRead()) return panic "scanner requires a readable stream";
     if (source.IsBinary()) return panic "scanner cannot read a binary file";
-    return Scanner{source, i8[]{}, 0, false, source.SeekVersion()};
+    return Scanner{source, []i8{}, 0, false, source.SeekVersion()};
 }
 
 func (scanner *Scanner) checkSource() string {
@@ -35,14 +35,14 @@ func whitespace(character i8) bool {
 func (scanner *Scanner) refill(count int) string {
     if (scanner.ended) return "";
     read := scanner.source.Readchunk(count);
-    if (read == Result<i8[]>.error) return read.(Result<i8[]>.error);
+    if (read == Result<[]i8>.error) return read.(Result<[]i8>.error);
     chunk := read.unwrap();
     if (len(chunk) == 0) { scanner.ended = true; return ""; }
     if (scanner.position == len(scanner.bytes)) {
         scanner.bytes = chunk; scanner.position = 0; return "";
     }
     if (scanner.position > 0 && scanner.position >= len(scanner.bytes) / 2) {
-        remaining := i8[]{};
+        remaining := []i8{};
         for (i := scanner.position; i < len(scanner.bytes); i++) remaining.append(scanner.bytes[i]);
         scanner.bytes = remaining; scanner.position = 0;
     }
@@ -64,7 +64,7 @@ func (scanner *Scanner) nextByte() (i8, bool, string) {
 func (scanner *Scanner) scanUntil(delimiter i8, spaces bool) Result<string> {
     error := scanner.checkSource();
     if (error != "") return Result<string>.error(error);
-    result := i8[]{};
+    result := []i8{};
     for (;;) {
         character, present, failure := scanner.nextByte();
         if (failure != "") return Result<string>.error(failure);
@@ -83,7 +83,7 @@ func (scanner *Scanner) Scann(n int) Result<ScanResult> {
     if (n < 0) return panic "invalid scan size";
     error := scanner.checkSource();
     if (error != "") return Result<ScanResult>.error(error);
-    result := i8[]{};
+    result := []i8{};
     for (i := 0; i < n; i++) {
         character, present, failure := scanner.nextByte();
         if (failure != "") return Result<ScanResult>.error(failure);

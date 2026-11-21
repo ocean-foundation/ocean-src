@@ -18,8 +18,8 @@ func nativeWindows() bool {
 }
 
 // Convert a UTF-8 path to a NUL-terminated little-endian UTF-16 byte array.
-func widePath(path string) Result<i8[]> {
-    result := i8[]{};
+func widePath(path string) Result<[]i8> {
+    result := []i8{};
     for (i := 0; i < len(path);) {
         first := (path[i]->u8)->int;
         code := first;
@@ -27,16 +27,16 @@ func widePath(path string) Result<i8[]> {
         if (first >= 192 && first < 224) { width = 2; code = first & 31; }
         else if (first >= 224 && first < 240) { width = 3; code = first & 15; }
         else if (first >= 240 && first < 248) { width = 4; code = first & 7; }
-        else if (first >= 128) return Result<i8[]>.error("invalid UTF-8 file path");
-        if (width > len(path) - i) return Result<i8[]>.error("invalid UTF-8 file path");
+        else if (first >= 128) return Result<[]i8>.error("invalid UTF-8 file path");
+        if (width > len(path) - i) return Result<[]i8>.error("invalid UTF-8 file path");
         for (j := 1; j < width; j++) {
             byte := (path[i + j]->u8)->int;
-            if (byte < 128 || byte > 191) return Result<i8[]>.error("invalid UTF-8 file path");
+            if (byte < 128 || byte > 191) return Result<[]i8>.error("invalid UTF-8 file path");
             code = (code << 6) | (byte & 63);
         }
         if ((width == 2 && code < 128) || (width == 3 && code < 2048) ||
             (width == 4 && code < 65536) || code > 1114111 || (code >= 55296 && code <= 57343))
-            return Result<i8[]>.error("invalid UTF-8 file path");
+            return Result<[]i8>.error("invalid UTF-8 file path");
         if (code > 65535) {
             code -= 65536;
             high := 55296 + (code >> 10);
@@ -50,7 +50,7 @@ func widePath(path string) Result<i8[]> {
     }
     result.append(0);
     result.append(0);
-    return Result<i8[]>.value(result);
+    return Result<[]i8>.value(result);
 }
 
 // Write truncates, ReadWrite creates without truncating, and append modes create.
@@ -95,10 +95,10 @@ func Open(path string, mode FileMode) Result<File> {
         creation = 4;
     } else return Result<File>.error("invalid file mode");
     access |= 128; // FILE_READ_ATTRIBUTES permits Size() on writable Windows handles.
-    bytes := path -> i8[];
+    bytes := path -> []i8;
     if (nativeWindows()) {
         converted := widePath(path);
-        if (converted == Result<i8[]>.error) return Result<File>.error(converted.(Result<i8[]>.error));
+        if (converted == Result<[]i8>.error) return Result<File>.error(converted.(Result<[]i8>.error));
         bytes = converted.unwrap();
     }
     else bytes.append(0);

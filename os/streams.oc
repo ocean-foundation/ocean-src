@@ -3,7 +3,7 @@ package os;
 // Copies share a registry identity, so Close invalidates every copy safely.
 struct File { slot int; generation int; }
 struct fileRecord { handle int; readable bool; writable bool; closed bool; generation int; binary bool; readEnded bool; seekVersion int; }
-files: fileRecord[];
+files: []fileRecord;
 
 func registerFile(handle int, readable bool, writable bool) File {
     for (i := 0; i < len(files); i++) {
@@ -115,11 +115,11 @@ func Stderr() Result<File> {
 }
 
 // Read at most n bytes. Empty success means EOF; native failures are errors.
-func (file File) Readchunk(n int) Result<i8[]> {
+func (file File) Readchunk(n int) Result<[]i8> {
     if (n < 0 || n > 2147483647) return panic "invalid read size";
-    if (!file.CanRead()) return Result<i8[]>.error("stream is not readable");
-    if (n == 0) return Result<i8[]>.value(i8[]{});
-    bytes := i8[n];
+    if (!file.CanRead()) return Result<[]i8>.error("stream is not readable");
+    if (n == 0) return Result<[]i8>.value([]i8{});
+    bytes := [n]i8;
     data: *void = bytes.data;
     count := n;
     handle := file.NativeHandle();
@@ -244,13 +244,13 @@ func (file File) Readchunk(n int) Result<i8[]> {
         if (result == -4) continue;
         break;
     }
-    if (result == -4096) return Result<i8[]>.error("reading is unsupported on this architecture/platform");
-    if (result < 0 || result > n) return Result<i8[]>.error("stream read failed");
+    if (result == -4096) return Result<[]i8>.error("reading is unsupported on this architecture/platform");
+    if (result < 0 || result > n) return Result<[]i8>.error("stream read failed");
     index := file.slot;
     files[index].readEnded = result == 0;
-    output := i8[]{};
+    output := []i8{};
     for (i := 0; i < result; i++) output.append(bytes[i]);
-    return Result<i8[]>.value(output);
+    return Result<[]i8>.value(output);
 }
 
 struct pollDescriptor { descriptor i32; events i16; returned i16; }
@@ -579,7 +579,7 @@ func consoleAvailable(handle int) Result<int> {
     count := events.unwrap();
     if (count == 0) return Result<int>.value(0);
     if (count > 107374182) return Result<int>.error("console input queue is too large");
-    records := i8[count * 20]; // Windows INPUT_RECORD is 20 bytes.
+    records := [count * 20]i8; // Windows INPUT_RECORD is 20 bytes.
     data: *void = records.data;
     peeked := peekConsole(handle, data, count);
     if (peeked == Result<int>.error) return peeked;
@@ -603,7 +603,7 @@ func consoleAvailable(handle int) Result<int> {
 func (file File) Write(text string) Result<int> {
     if (!file.CanWrite()) return Result<int>.error("stream is not writable");
     handle := file.NativeHandle();
-    bytes := text -> i8[];
+    bytes := text -> []i8;
     offset := 0;
     for (; offset < len(bytes);) {
         data: *void = &bytes[offset];

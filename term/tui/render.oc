@@ -21,10 +21,10 @@ func columns(scalar int) int {
 // A tab can expand to at most eight spaces; reserve once for the worst case.
 // Write through the buffer to avoid copying owned storage on every append.
 func frame(view string, size term.Size) (string, int) {
-    storage := i8[len(view)*8+4];
+    storage := [len(view)*8+4]i8;
     result := storage.data;
     used := 0;
-    bytes := view -> i8[];
+    bytes := view -> []i8;
     source := bytes.data;
     row := 0;
     column := 0;
@@ -74,9 +74,9 @@ func frame(view string, size term.Size) (string, int) {
 }
 // Make each row self-contained, retaining inherited SGR styles across newlines.
 // Comparing plain row bytes alone would miss a color changed on an earlier row.
-func styledLines(text string) string[] {
-    result := string[]{};
-    storage := text -> i8[]; source := storage.data;
+func styledLines(text string) []string {
+    result := []string{};
+    storage := text -> []i8; source := storage.data;
     active := ""; initial := ""; start := 0;
     for (i := 0; i < len(text);) {
         if (source[i] == 27 && i+1 < len(text) && source[i+1] == 91) {
@@ -110,7 +110,7 @@ func paint(view string, previousView string, previousRows int, alternate bool, s
         return "\x1b[?2026h"+prefix+"\x1b[0m"+text+"\x1b[0m\x1b[J\x1b[?2026l", rows;
     }
     next := styledLines(text);
-    previous := string[]{};
+    previous := []string{};
     if (!force) {
         old, ignored := frame(previousView,size);
         previous = styledLines(old);

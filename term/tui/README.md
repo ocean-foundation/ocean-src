@@ -126,7 +126,7 @@ Custom commands can perform I/O and return any application-defined message:
 func load(file os.File) tui.Cmd {
     return func() tui.Msg {
         result := file.Readchunk(4096);
-        if (result == Result<i8[]>.error) return tui.ErrorMsg{result.(Result<i8[]>.error)};
+        if (result == Result<[]i8>.error) return tui.ErrorMsg{result.(Result<[]i8>.error)};
         return tui.ReadMsg{Bytes: result.unwrap()};
     };
 }

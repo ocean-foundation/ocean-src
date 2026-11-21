@@ -77,7 +77,7 @@ func checkInterleavedSubtestTrees(t *testing.T) {
     model.accept("pass\t0\t546573744f6e652f616c706861\t");
     model.accept("fail\t0\t5465737454776f\t");
     model.accept("skip\t0\t546573744f6e654d6f72652f616c706861\t");
-    expected := string[8]{"TestOne", "TestOne/alpha", "TestOne/alpha/deep", "TestOne/beta", "TestTwo", "TestTwo/alpha", "TestOneMore", "TestOneMore/alpha"};
+    expected := [8]string{"TestOne", "TestOne/alpha", "TestOne/alpha/deep", "TestOne/beta", "TestTwo", "TestTwo/alpha", "TestOneMore", "TestOneMore/alpha"};
     view := model.View();
     previous := -1;
     for (i, name := range expected) {
@@ -140,7 +140,7 @@ struct displayTest {
 func TestDisplayScenarios(t *testing.T) {
     t.Parallel();
     // Each case owns its model; events within a scenario stay in order.
-    tests := displayTest[]{
+    tests := []displayTest{
         {"LiveTransitions", checkLiveTransitions},
         {"ResizeAndColor", checkResizeAndColor},
         {"FollowAndScrolling", checkFollowAndScrolling},

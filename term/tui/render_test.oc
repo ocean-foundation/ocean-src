@@ -12,7 +12,7 @@ struct frameTest {
 
 func TestFrameClippingAndStyles(t *testing.T) {
     t.Parallel();
-    tests := frameTest[]{
+    tests := []frameTest{
         {"UTF-8 clipping styles and height", "\x1b[31mab界cd\x1b[0m\nnext\nignored", term.Size{Width:5,Height:2}, "\x1b[31mab界\x1b[0m\r\nnext\x1b[0m", 1},
         {"tabs and control sanitization", "a\tb\x1b[2J!", term.Size{Width:12,Height:1}, "a       b!\x1b[0m", 0},
     };

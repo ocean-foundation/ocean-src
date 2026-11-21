@@ -34,11 +34,11 @@ func TestLargeOutput(t *testing.T) {
 func TestDirectoryAndEnvironment(t *testing.T) {
     if (windows()) { t.Skip("POSIX utility fixture; native Windows coverage below"); return; }
     c := Command("/bin/sh", "-c", "printf '%s|' \"$OCEAN_EXEC_TEST\"; pwd");
-    c.Dir = "/"; c.Env = string[]{"OCEAN_EXEC_TEST=custom"};
+    c.Dir = "/"; c.Env = []string{"OCEAN_EXEC_TEST=custom"};
     if (c.Output().unwrap() != "custom|/\n") t.Fatal("directory/environment");
     bad := Command("/bin/sh", "-c", "exit 0"); bad.Dir = "/not/a/real/directory";
     if (!bad.Run().hasError()) t.Fatal("invalid directory");
-    badEnv := Command("/bin/sh", "-c", "exit 0"); badEnv.Env = string[]{"X=bad\0value"};
+    badEnv := Command("/bin/sh", "-c", "exit 0"); badEnv.Env = []string{"X=bad\0value"};
     if (!badEnv.Run().hasError()) t.Fatal("invalid environment");
 }
 func TestLookPath(t *testing.T) {
@@ -49,7 +49,7 @@ func TestLookPath(t *testing.T) {
 
 extern buffer<i8> getenv(buffer<i8> name);
 func fixtureValue(name string) string {
-    key := (name + "\0") -> i8[];
+    key := (name + "\0") -> []i8;
     return copyCString(extern.getenv(key.data));
 }
 func nativeFixture(t *testing.T) string {
@@ -92,15 +92,15 @@ func TestWindowsEnvironmentAndArguments(t *testing.T) {
     actual := diagnosticOutput(t, "argument preservation", &c);
     if (actual != "a b|$(echo injected)|say \"hi\"|C:\\tail\\|🌊|") t.Fatalf("argument preservation: got {}", actual);
     environment := Command(path, "environment", directory);
-    environment.Env = string[]{"OCEAN_EXEC_TEST=custom"}; environment.Dir = directory;
+    environment.Env = []string{"OCEAN_EXEC_TEST=custom"}; environment.Dir = directory;
     if (diagnosticOutput(t, "replacement environment and directory", &environment) != "custom|cwd-ok") t.Fatal("native environment/directory");
     bad := Command(path); bad.Dir = directory + "/ocean-no-such-directory";
     if (!diagnosticRun(t, "invalid directory rejection", &bad).hasError()) t.Fatal("invalid native directory");
 }
 
 func TestRejectEmptyEnvironmentNames(t *testing.T) {
-    for (_, entry := range string[]{"", "=value", "=value=again", "NO_EQUALS"}) {
-        command := Command("ocean-not-executed"); command.Env = string[]{entry};
+    for (_, entry := range []string{"", "=value", "=value=again", "NO_EQUALS"}) {
+        command := Command("ocean-not-executed"); command.Env = []string{entry};
         result := command.Run();
         if (!result.hasError() || command.ExitCode != -1) t.Fatal("invalid environment accepted");
         if (result.error() != "exec: environment name is empty" && result.error() != "exec: environment entry requires NAME=value") t.Fatal("environment was not validated before spawn");

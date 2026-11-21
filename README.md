@@ -30,9 +30,9 @@ the stable Win32 API instead of version-dependent raw syscall numbers; link
 this library to native Windows executable links.
 
 `io.Print`, `io.Println`, `io.Sprint`, and the formatted-output functions render
-mutable `i8[]` values as comma-separated decimal bytes, for example `[1, 5, 3]`.
+mutable `[]i8` values as comma-separated decimal bytes, for example `[1, 5, 3]`.
 Strings still print as text; convert with `bytes -> string` for textual output.
-Use the matching compiler, which distinguishes concrete `string` and `i8[]`
+Use the matching compiler, which distinguishes concrete `string` and `[]i8`
 type-switch cases.
 
 Float formatting is implemented in Ocean, with exact IEEE binary64 conversion
@@ -107,7 +107,7 @@ another reader can consume data before a subsequent scan.
 | `Readn(n)` | `Result<os.ReadResult>`: `Bytes array<i8>` of length n, `End bool` for early EOF; unused bytes are zero-filled |
 | `Readend()` | `Result<array<i8>>`: current position through EOF, advances cursor |
 | `Readall()` | `Result<array<i8>>`: entire file, preserves cursor and previous EOF state |
-| `Readchunk(n)` | `Result<i8[]>`: up to n bytes; successful empty buffer at EOF |
+| `Readchunk(n)` | `Result<[]i8>`: up to n bytes; successful empty buffer at EOF |
 | `Size()` | `Result<int>`: size in bytes, requires a seekable file |
 | `PollRead()` | `Result<int>`: OS readiness information without blocking |
 | `Write(text)` | `Result<int>`: number of bytes written |

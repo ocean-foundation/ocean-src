@@ -10,7 +10,7 @@ import "os/exec";
 command := exec.Command("printf", "%s", "hello world");
 output := command.Output().unwrap();
 command = exec.Command("/bin/sh", "-c", "printf '%s' \"$GREETING\"");
-command.Env = string[]{"GREETING=hello"};
+command.Env = []string{"GREETING=hello"};
 command.Dir = "/tmp";
 output = command.CombinedOutput().unwrap();
 ```

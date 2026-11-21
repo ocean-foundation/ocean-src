@@ -2,10 +2,10 @@ package tui;
 
 import "io";
 
-struct keyDecoder { pending i8[]; idle int; }
+struct keyDecoder { pending []i8; idle int; }
 
 func (decoder *keyDecoder) take(count int) string {
-    bytes := i8[]{};
+    bytes := []i8{};
     for (i := 0; i < count; i++) bytes.append(decoder.pending.remove(0));
     decoder.idle = 0;
     return bytes -> string;
@@ -90,7 +90,7 @@ func (decoder *keyDecoder) dispatch(program *Program, end bool) {
         else if (first == 27) key = "esc";
         else if (first == 0) key = "ctrl+space";
         else if (first < 27) {
-            character: i8[] = {(first + 96) -> i8};
+            character: []i8 = {(first + 96) -> i8};
             key = "ctrl+" + (character -> string);
         } else if (first < 32) key = "ctrl+" + io.Sprint(first);
         if (key != "") {
