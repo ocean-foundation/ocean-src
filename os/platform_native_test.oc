@@ -71,6 +71,28 @@ func TestWindowsFilesystem(t *testing.T) {
     if (contents != "new") t.Fatal("rename did not replace the destination");
 }
 
+func TestWindowsReadDirDriveRelative(t *testing.T) {
+    if (os.OS() != "windows") t.Skip("requires Windows");
+    drive := os.WindowsLookupEnv("SystemDrive").unwrap();
+    entries := os.WindowsReadDir(drive).unwrap();
+    expected := os.WindowsReadDir(drive+".").unwrap();
+    if (len(entries) != len(expected)) t.Fatal("bare drive should list the drive's current directory");
+    for (i := 0; i < len(entries); i++) {
+        if (entries[i].Name != expected[i].Name || entries[i].Directory != expected[i].Directory) {
+            t.Fatal("bare drive should list the drive's current directory");
+        }
+    }
+}
+
+func TestWindowsStatUNCShareRoot(t *testing.T) {
+    if (os.OS() != "windows") t.Skip("requires Windows");
+    share := os.WindowsLookupEnv("OCEAN_TEST_UNC_SHARE");
+    if (share.hasError()) t.Skip("set OCEAN_TEST_UNC_SHARE to an accessible UNC share root");
+    path := share.unwrap();
+    info := os.WindowsStat(path).unwrap();
+    if (!info.Exists || !info.Directory) t.Fatal("expected UNC share root to be a directory");
+}
+
 func writeFile(path string, contents string) {
     file := os.Open(path,os.FileMode.Write).unwrap();
     defer file.Close();

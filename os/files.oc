@@ -43,6 +43,51 @@ func widePath(path string) Result<[]i8> {
     return Result<[]i8>.value(result);
 }
 
+func windowsCreateFile(data *void, access int, creation int, flags int) int {
+    parameters := [3]int{access,creation,flags};
+    options := parameters.data -> int;
+    result := -1;
+    asm x86_64/windows {
+        mov rcx, ${data}
+        mov r10, ${options}
+        sub rsp, 64
+        mov edx, [r10]
+        mov r8d, 7
+        xor r9d, r9d
+        mov eax, [r10 + 8]
+        mov dword ptr [rsp + 32], eax
+        mov eax, [r10 + 16]
+        mov dword ptr [rsp + 40], eax
+        mov qword ptr [rsp + 48], 0
+        call CreateFileW
+        add rsp, 64
+        mov ${result}, rax
+    }
+    asm aarch64/windows {
+        ldr x0, ${data}
+        ldr x19, ${options}
+        sub sp, sp, #80
+        stp x9, x10, [sp]
+        stp x11, x12, [sp, #16]
+        stp x13, x14, [sp, #32]
+        str x15, [sp, #48]
+        ldr w1, [x19]
+        mov x2, #7
+        mov x3, #0
+        ldr w4, [x19, #8]
+        ldr w5, [x19, #16]
+        mov x6, #0
+        bl CreateFileW
+        ldp x9, x10, [sp]
+        ldp x11, x12, [sp, #16]
+        ldp x13, x14, [sp, #32]
+        ldr x15, [sp, #48]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return result;
+}
+
 // Write truncates, ReadWrite creates without truncating, and append modes create.
 func Open(path string, mode FileMode) Result<File> {
     binary := false;
@@ -142,47 +187,7 @@ func Open(path string, mode FileMode) Result<File> {
             cneg x0, x0, cs
             str x0, ${result}
         }
-    asm x86_64/windows {
-        mov r12, ${data}
-        mov r13, ${access}
-        mov r14, ${creation}
-        sub rsp, 64
-        mov rcx, r12
-        mov edx, r13d
-        mov r8d, 7
-        xor r9d, r9d
-        mov dword ptr [rsp + 32], r14d
-        mov dword ptr [rsp + 40], 128
-        mov qword ptr [rsp + 48], 0
-        call CreateFileW
-        add rsp, 64
-        mov ${result}, rax
-    }
-    asm aarch64/windows {
-        ldr x19, ${data}
-        ldr x20, ${access}
-        ldr x21, ${creation}
-        sub sp, sp, #80
-        stp x9, x10, [sp]
-        stp x11, x12, [sp, #16]
-        stp x13, x14, [sp, #32]
-        str x15, [sp, #48]
-        mov x0, x19
-        mov w1, w20
-        mov x2, #7
-        mov x3, #0
-        mov w4, w21
-        mov x5, #128
-        mov x6, #0
-        bl CreateFileW
-        mov x22, x0
-        ldp x9, x10, [sp]
-        ldp x11, x12, [sp, #16]
-        ldp x13, x14, [sp, #32]
-        ldr x15, [sp, #48]
-        add sp, sp, #80
-        str x22, ${result}
-    }
+        if (nativeWindows()) result = windowsCreateFile(data,access,creation,128); // FILE_ATTRIBUTE_NORMAL
         if (result == -4) continue;
         break;
     }
