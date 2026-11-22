@@ -28,3 +28,61 @@ func IsEnum(value any) bool {
 func EnumVariant(value any) string {
     return compilerReflectEnumVariant(value);
 }
+
+// The first byte encodes signedness and the bit count in the highest payload byte.
+// The remaining bytes are the integer's little-endian bit pattern.
+func varIntegerBytes(value any) string {
+    return compilerReflectVarInteger(value);
+}
+
+// VarIntegerDecimal returns exact decimal text for varint and varuint values,
+// including named types with those representations. Other values return "".
+func VarIntegerDecimal(value any) string {
+    bits := varIntegerBytes(value);
+    if (len(bits) == 0) return "";
+
+    header := bits[0]->int;
+    topMask := (1 << ((header - 1) % 8 + 1)) - 1;
+    negative := header > 8 && ((bits[len(bits) - 1]->u8)->int & ((topMask + 1) >> 1)) != 0;
+    firstNonzero := 1;
+    if (negative) {
+        for (; bits[firstNonzero] == 0; firstNonzero++) {}
+    }
+
+    // Accumulate decimal limbs from the most significant byte. A limb and a
+    // byte multiplier fit comfortably in an int.
+    base := 1000000000;
+    limbs := []int{0};
+    for (i := len(bits) - 1; i > 0; i--) {
+        octet := (bits[i]->u8)->int;
+        if (negative) {
+            // Two's-complement negation leaves lower zero bytes intact and
+            // propagates a carry only through the first nonzero byte.
+            mask := i == len(bits) - 1 ? topMask : 255;
+            if (i >= firstNonzero) octet = mask - octet + (i == firstNonzero ? 1 : 0);
+        }
+        carry := octet;
+        for (j := 0; j < len(limbs); j++) {
+            product := limbs[j] * 256 + carry;
+            limbs[j] = product % base;
+            carry = product / base;
+        }
+        if (carry != 0) limbs.append(carry);
+    }
+    return (negative ? "-" : "") + decimalLimbs(&limbs, 0, len(limbs));
+}
+
+// Join limbs in a balanced tree to avoid repeatedly copying the entire prefix.
+func decimalLimbs(limbs *[]int, start int, end int) string {
+    if (end - start == 1) {
+        number := (*limbs)[len(*limbs) - 1 - start];
+        digits := "";
+        for (;;) {
+            digits = (48 + number % 10)->i8 + digits;
+            number /= 10;
+            if (number == 0 && (start == 0 || len(digits) == 9)) return digits;
+        }
+    }
+    middle := start + (end - start) / 2;
+    return decimalLimbs(limbs, start, middle) + decimalLimbs(limbs, middle, end);
+}
