@@ -1,0 +1,391 @@
+package os;
+
+// Only load system libraries. The default Ocean link already supplies kernel32.
+func windowsModule(name string, load bool) int {
+    bytes := (name+"\0") -> []i8;
+    data := bytes.data -> int;
+    flag := load ? 2048 : 0; // LOAD_LIBRARY_SEARCH_SYSTEM32
+    result := 0;
+    asm x86_64/windows {
+        mov rcx, ${data}
+        mov r8, ${flag}
+        sub rsp, 32
+        test r8, r8
+        jz 1f
+        xor edx, edx
+        call LoadLibraryExA
+        jmp 2f
+        1: call GetModuleHandleA
+        2: add rsp, 32
+        mov ${result}, rax
+    }
+    asm aarch64/windows {
+        ldr x0, ${data}
+        ldr x2, ${flag}
+        sub sp, sp, #64
+        stp x9, x10, [sp]
+        stp x11, x12, [sp, #16]
+        stp x13, x14, [sp, #32]
+        str x15, [sp, #48]
+        cbz x2, 1f
+        mov x1, #0
+        bl LoadLibraryExA
+        b 2f
+        1: bl GetModuleHandleA
+        2: ldp x9, x10, [sp]
+        ldp x11, x12, [sp, #16]
+        ldp x13, x14, [sp, #32]
+        ldr x15, [sp, #48]
+        add sp, sp, #64
+        str x0, ${result}
+    }
+    return result;
+}
+
+func windowsSymbol(module int, name string) int {
+    if (module == 0) return 0;
+    bytes := (name+"\0") -> []i8;
+    data := bytes.data -> int;
+    result := 0;
+    asm x86_64/windows {
+        mov rcx, ${module}
+        mov rdx, ${data}
+        sub rsp, 32
+        call GetProcAddress
+        add rsp, 32
+        mov ${result}, rax
+    }
+    asm aarch64/windows {
+        ldr x0, ${module}
+        ldr x1, ${data}
+        sub sp, sp, #64
+        stp x9, x10, [sp]
+        stp x11, x12, [sp, #16]
+        stp x13, x14, [sp, #32]
+        str x15, [sp, #48]
+        bl GetProcAddress
+        ldp x9, x10, [sp]
+        ldp x11, x12, [sp, #16]
+        ldp x13, x14, [sp, #32]
+        ldr x15, [sp, #48]
+        add sp, sp, #64
+        str x0, ${result}
+    }
+    return result;
+}
+
+// The Win32 calls here take at most four pointer or integer arguments.
+func windowsCall(address int, first int, second int, third int, fourth int) int {
+    value, ignored := windowsCallWithError(address,first,second,third,fourth);
+    return value;
+}
+
+func windowsCallWithError(address int, first int, second int, third int, fourth int) (int, u32) {
+    if (address == 0) return 0,127; // ERROR_PROC_NOT_FOUND
+    args := [4]int{first,second,third,fourth};
+    data := args.data -> int;
+    result := 0;
+    lastError := 0;
+    asm x86_64/windows {
+        mov r12, ${address}
+        mov r13, ${data}
+        sub rsp, 48
+        xor ecx, ecx
+        call SetLastError
+        mov rcx, [r13]
+        mov rdx, [r13 + 8]
+        mov r8, [r13 + 16]
+        mov r9, [r13 + 24]
+        call r12
+        mov [rsp + 32], rax
+        call GetLastError
+        mov rdx, [rsp + 32]
+        add rsp, 48
+        mov ${result}, rdx
+        mov ${lastError}, rax
+    }
+    asm aarch64/windows {
+        ldr x19, ${address}
+        ldr x20, ${data}
+        sub sp, sp, #64
+        stp x9, x10, [sp]
+        stp x11, x12, [sp, #16]
+        stp x13, x14, [sp, #32]
+        str x15, [sp, #48]
+        mov w0, #0
+        bl SetLastError
+        ldp x0, x1, [x20]
+        ldp x2, x3, [x20, #16]
+        blr x19
+        str x0, [sp, #56]
+        bl GetLastError
+        ldr x1, [sp, #56]
+        ldp x9, x10, [sp]
+        ldp x11, x12, [sp, #16]
+        ldp x13, x14, [sp, #32]
+        ldr x15, [sp, #48]
+        add sp, sp, #64
+        str x1, ${result}
+        str x0, ${lastError}
+    }
+    return result,lastError -> u32;
+}
+
+// Convert a UTF-8 path to UTF-16, using native separators even for extended paths.
+func windowsPath(path string) Result<[]i8> {
+    if (path == "") return Result<[]i8>.error("empty path");
+    for (i := 0; i < len(path); i++) {
+        if (path[i] == 0) return Result<[]i8>.error("file path contains NUL");
+    }
+    converted := widePath(path);
+    if (converted.hasError()) return converted;
+    wide := converted.unwrap();
+    for (i := 0; i+1 < len(wide); i += 2) {
+        if (wide[i] == '/' && wide[i+1] == 0) wide[i] = 92;
+    }
+    return Result<[]i8>.value(wide);
+}
+
+func windowsUTF8(wide buffer<u16>) string {
+    bytes := []i8{};
+    for (i := 0; wide[i] != 0; i++) {
+        scalar := wide[i] -> int;
+        if (scalar >= 55296 && scalar < 56320 && wide[i+1] >= 56320 && wide[i+1] < 57344) {
+            scalar = 65536+((scalar-55296) << 10)+(wide[i+1] -> int)-56320;
+            i++;
+        } else if (scalar >= 55296 && scalar < 57344) scalar = 65533;
+        if (scalar < 128) bytes.append(scalar -> i8);
+        else {
+            if (scalar < 2048) bytes.append((192 | (scalar >> 6)) -> i8);
+            else {
+                if (scalar < 65536) bytes.append((224 | (scalar >> 12)) -> i8);
+                else {
+                    bytes.append((240 | (scalar >> 18)) -> i8);
+                    bytes.append((128 | ((scalar >> 12) & 63)) -> i8);
+                }
+                bytes.append((128 | ((scalar >> 6) & 63)) -> i8);
+            }
+            bytes.append((128 | (scalar & 63)) -> i8);
+        }
+    }
+    return bytes -> string;
+}
+
+func windowsKernelSymbol(name string) int {
+    return windowsSymbol(windowsModule("kernel32.dll",false),name);
+}
+
+// WindowsLookupEnv reads a Unicode environment variable. An unset value or a
+// non-Windows target returns an error. An empty value is a successful lookup.
+func WindowsLookupEnv(name string) Result<string> {
+    if (!nativeWindows()) return Result<string>.error("WindowsLookupEnv requires Windows");
+    if (name == "") return Result<string>.error("empty environment variable name");
+    for (i := 0; i < len(name); i++) {
+        if (name[i] == 0) return Result<string>.error("environment variable name contains NUL");
+    }
+    converted := widePath(name);
+    if (converted.hasError()) return Result<string>.error(converted.error());
+    key := converted.unwrap();
+    read := windowsKernelSymbol("GetEnvironmentVariableW");
+    required, initialStatus := windowsCallWithError(read,key.data -> int,0,0,0);
+    size := required -> u32;
+    if (size == 0 && initialStatus == 0) return Result<string>.value("");
+    for (size != 0) {
+        value := [size -> int]u16;
+        copied, code := windowsCallWithError(read,key.data -> int,value.data -> int,size -> int,0);
+        length := copied -> u32;
+        if (length == 0 && code == 0) return Result<string>.value("");
+        if (length == 0) break;
+        if (length < size) return Result<string>.value(windowsUTF8(value.data));
+        size = length;
+    }
+    return Result<string>.error("could not read Windows environment variable");
+}
+
+// WindowsKnownFolder resolves a Windows KNOWNFOLDERID for the current user.
+// Pass a GUID with or without braces. The lookup respects folder redirection
+// and leaves directory creation to the caller. Folders without a path return an error.
+func WindowsKnownFolder(folderID string) Result<string> {
+    if (!nativeWindows()) return Result<string>.error("WindowsKnownFolder requires Windows");
+    if (len(folderID) == 36) folderID = "{"+folderID+"}";
+    if (len(folderID) != 38 || folderID[0] != '{' || folderID[37] != '}') {
+        return Result<string>.error("invalid Windows known-folder GUID");
+    }
+    converted := widePath(folderID);
+    if (converted.hasError()) return Result<string>.error("invalid Windows known-folder GUID");
+    guid := converted.unwrap();
+    close := windowsKernelSymbol("FreeLibrary");
+    shell := windowsModule("shell32.dll",true);
+    if (shell == 0) return Result<string>.error("could not load shell32.dll");
+    defer windowsCall(close,shell,0,0,0);
+    ole := windowsModule("ole32.dll",true);
+    if (ole == 0) return Result<string>.error("could not load ole32.dll");
+    defer windowsCall(close,ole,0,0,0);
+    lookup := windowsSymbol(shell,"SHGetKnownFolderPath");
+    parse := windowsSymbol(ole,"IIDFromString");
+    initialize := windowsSymbol(ole,"CoInitializeEx");
+    uninitialize := windowsSymbol(ole,"CoUninitialize");
+    free := windowsSymbol(ole,"CoTaskMemFree");
+    if (lookup == 0 || parse == 0 || initialize == 0 || uninitialize == 0 || free == 0) {
+        return Result<string>.error("Windows known-folder APIs are unavailable");
+    }
+    id := [4]u32; // GUID is 16 bytes, aligned to 4 bytes.
+    if ((windowsCall(parse,guid.data -> int,id.data -> int,0,0) -> i32) < 0) {
+        return Result<string>.error("invalid Windows known-folder GUID");
+    }
+    status := windowsCall(initialize,0,2,0,0) -> i32; // COINIT_APARTMENTTHREADED
+    // RPC_E_CHANGED_MODE means the current thread already initialized COM.
+    if (status < 0 && status != -2147417850) return Result<string>.error("could not initialize COM");
+    initialized := status >= 0;
+    path: buffer<u16> = 0 -> buffer<u16>;
+    status = windowsCall(lookup,id.data -> int,16384,0,(&path) -> int) -> i32; // KF_FLAG_DONT_VERIFY
+    folder := "";
+    if (status >= 0 && (path -> int) != 0) folder = windowsUTF8(path);
+    windowsCall(free,path -> int,0,0,0);
+    if (initialized) windowsCall(uninitialize,0,0,0,0);
+    if (folder == "") return Result<string>.error("could not resolve Windows known folder "+folderID);
+    return Result<string>.value(folder);
+}
+
+struct WindowsPathInfo { Exists bool; Directory bool; }
+
+func windowsPathSeparator(byte i8) bool {
+    return byte == '/' || byte == 92;
+}
+
+func windowsUNCShareRoot(path string) bool {
+    if (len(path) < 5 || !windowsPathSeparator(path[0]) || !windowsPathSeparator(path[1])) return false;
+    server := 2;
+    // Extended UNC paths start with \\?\UNC\ (or \\.\UNC\).
+    if ((path[2] == '?' || path[2] == '.') && windowsPathSeparator(path[3])) {
+        if (len(path) < 11 || (path[4] | 32) != 'u' || (path[5] | 32) != 'n' ||
+            (path[6] | 32) != 'c' || !windowsPathSeparator(path[7])) return false;
+        server = 8;
+    }
+    share := server;
+    for (share < len(path) && !windowsPathSeparator(path[share])) share++;
+    if (share == server || share+1 >= len(path) || windowsPathSeparator(path[share+1])) return false;
+    end := share+1;
+    for (end < len(path) && !windowsPathSeparator(path[end])) end++;
+    for (end < len(path) && windowsPathSeparator(path[end])) end++;
+    return end == len(path);
+}
+
+func windowsStatShareRoot(wide []i8) Result<WindowsPathInfo> {
+    query := windowsKernelSymbol("GetFileInformationByHandle");
+    close := windowsKernelSymbol("CloseHandle");
+    if (query == 0 || close == 0) return Result<WindowsPathInfo>.error("Windows file information APIs are unavailable");
+    // OPEN_EXISTING and FILE_FLAG_BACKUP_SEMANTICS let CreateFileW open a directory.
+    handle := windowsCreateFile(wide.data,0,3,33554432);
+    if (handle == -1) return Result<WindowsPathInfo>.error("could not open Windows share root");
+    defer windowsCall(close,handle,0,0,0);
+    // BY_HANDLE_FILE_INFORMATION has 13 DWORDs, starting with the file attributes.
+    information := [13]u32;
+    if ((windowsCall(query,handle,information.data -> int,0,0) -> u32) == 0) {
+        return Result<WindowsPathInfo>.error("could not read Windows file attributes");
+    }
+    return Result<WindowsPathInfo>.value(WindowsPathInfo{Exists:true,Directory:(information[0] & 16) != 0});
+}
+
+// WindowsStat reports the path's existence and directory attribute. A missing
+// path sets Exists to false. Inaccessible paths return an error.
+func WindowsStat(path string) Result<WindowsPathInfo> {
+    if (!nativeWindows()) return Result<WindowsPathInfo>.error("WindowsStat requires Windows");
+    shareRoot := windowsUNCShareRoot(path);
+    if (shareRoot && !windowsPathSeparator(path[len(path)-1])) path += "/";
+    converted := windowsPath(path);
+    if (converted.hasError()) return Result<WindowsPathInfo>.error(converted.error());
+    wide := converted.unwrap();
+    // GetFileAttributesW cannot query the root of a UNC share.
+    if (shareRoot) return windowsStatShareRoot(wide);
+    query := windowsKernelSymbol("GetFileAttributesW");
+    if (query == 0) return Result<WindowsPathInfo>.error("GetFileAttributesW is unavailable");
+    value, status := windowsCallWithError(query,wide.data -> int,0,0,0);
+    attributes := value -> u32;
+    if (attributes != 4294967295) return Result<WindowsPathInfo>.value(WindowsPathInfo{Exists:true,Directory:(attributes & 16) != 0});
+    if (status == 2 || status == 3) return Result<WindowsPathInfo>.value(WindowsPathInfo{});
+    return Result<WindowsPathInfo>.error("could not read Windows file attributes");
+}
+
+// WindowsMkdir creates one directory. Its parent must already exist.
+func WindowsMkdir(path string) Result<bool> {
+    if (!nativeWindows()) return Result<bool>.error("WindowsMkdir requires Windows");
+    converted := windowsPath(path);
+    if (converted.hasError()) return Result<bool>.error(converted.error());
+    wide := converted.unwrap();
+    if ((windowsCall(windowsKernelSymbol("CreateDirectoryW"),wide.data -> int,0,0,0) -> u32) == 0) {
+        return Result<bool>.error("could not create Windows directory");
+    }
+    return Result<bool>.value(true);
+}
+
+// WindowsRename moves a file and replaces an existing destination file. Both
+// paths must be on the same volume.
+func WindowsRename(from string, to string) Result<bool> {
+    if (!nativeWindows()) return Result<bool>.error("WindowsRename requires Windows");
+    sourcePath := windowsPath(from);
+    if (sourcePath.hasError()) return Result<bool>.error(sourcePath.error());
+    destinationPath := windowsPath(to);
+    if (destinationPath.hasError()) return Result<bool>.error(destinationPath.error());
+    source := sourcePath.unwrap();
+    destination := destinationPath.unwrap();
+    move := windowsKernelSymbol("MoveFileExW");
+    if ((windowsCall(move,source.data -> int,destination.data -> int,1,0) -> u32) == 0) { // MOVEFILE_REPLACE_EXISTING
+        return Result<bool>.error("could not rename Windows file");
+    }
+    return Result<bool>.value(true);
+}
+
+// WindowsRemove deletes a file or an empty directory.
+func WindowsRemove(path string) Result<bool> {
+    info := WindowsStat(path);
+    if (info.hasError()) return Result<bool>.error(info.error());
+    if (!info.unwrap().Exists) return Result<bool>.error("Windows path does not exist");
+    wide := windowsPath(path).unwrap();
+    symbol := info.unwrap().Directory ? "RemoveDirectoryW" : "DeleteFileW";
+    if ((windowsCall(windowsKernelSymbol(symbol),wide.data -> int,0,0,0) -> u32) == 0) {
+        return Result<bool>.error("could not remove Windows path");
+    }
+    return Result<bool>.value(true);
+}
+
+struct WindowsDirEntry { Name string; Directory bool; }
+
+// A separator after a bare drive designator would turn it into a drive root.
+func windowsDirectoryPattern(folder string) string {
+    last := folder[len(folder)-1];
+    drive := folder[0] | 32;
+    bareDrive := len(folder) == 2 && last == ':' && drive >= 'a' && drive <= 'z';
+    return folder+((bareDrive || windowsPathSeparator(last)) ? "*" : "/*");
+}
+
+// WindowsReadDir returns directory entries in filesystem order, excluding the current and parent directory entries.
+func WindowsReadDir(folder string) Result<[]WindowsDirEntry> {
+    if (!nativeWindows()) return Result<[]WindowsDirEntry>.error("WindowsReadDir requires Windows");
+    if (folder == "") return Result<[]WindowsDirEntry>.error("empty directory path");
+    pattern := windowsPath(windowsDirectoryPattern(folder));
+    if (pattern.hasError()) return Result<[]WindowsDirEntry>.error(pattern.error());
+    wide := pattern.unwrap();
+    kernel := windowsModule("kernel32.dll",false);
+    first := windowsSymbol(kernel,"FindFirstFileW");
+    next := windowsSymbol(kernel,"FindNextFileW");
+    close := windowsSymbol(kernel,"FindClose");
+    if (first == 0 || next == 0 || close == 0) return Result<[]WindowsDirEntry>.error("Windows directory enumeration is unavailable");
+    // WIN32_FIND_DATAW is 592 bytes, with cFileName at byte 44.
+    data := [148]u32;
+    handle, status := windowsCallWithError(first,wide.data -> int,data.data -> int,0,0);
+    entries := []WindowsDirEntry{};
+    if (handle == -1) {
+        if (status == 2) return Result<[]WindowsDirEntry>.value(entries); // No matches.
+        return Result<[]WindowsDirEntry>.error("could not open Windows directory");
+    }
+    defer windowsCall(close,handle,0,0,0);
+    for (;;) {
+        name := windowsUTF8(((data.data -> int)+44) -> buffer<u16>);
+        if (name != "." && name != "..") entries.append(WindowsDirEntry{Name:name,Directory:(data[0] & 16) != 0});
+        more, nextStatus := windowsCallWithError(next,handle,data.data -> int,0,0);
+        if ((more -> u32) != 0) continue;
+        if (nextStatus == 18) return Result<[]WindowsDirEntry>.value(entries); // ERROR_NO_MORE_FILES
+        return Result<[]WindowsDirEntry>.error("could not finish reading Windows directory");
+    }
+}

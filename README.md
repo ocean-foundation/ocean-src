@@ -53,6 +53,25 @@ and Microsoft's [GetStdHandle](https://learn.microsoft.com/en-us/windows/console
 and [WriteFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile)
 contracts.
 
+## Target platform and Windows paths
+
+`os.OS()` and `os.Arch()` report the program's target. OS names include `linux`,
+`macos`, and `windows`. Architecture names include `x86_64`, `aarch64`, and
+`riscv64`. A JavaScript-hosted WebAssembly build reports `js` and `wasm`.
+
+Windows-specific functions use Unicode paths and return an error on other targets.
+
+- `os.WindowsKnownFolder(id)` resolves the filesystem path for a Windows
+  [known-folder GUID](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid)
+  for the current user. It accepts GUIDs with or without braces and follows folder
+  redirection. An unavailable or virtual folder without a path returns an error.
+- `os.WindowsLookupEnv(name)` reads a Unicode environment variable.
+- `os.WindowsStat(path)` reports whether a path exists and whether it is a directory.
+- `os.WindowsMkdir(path)` creates a directory under an existing parent.
+- `os.WindowsReadDir(path)` lists names and directory attributes in filesystem order.
+- `os.WindowsRename(from, to)` moves a file on the same volume and replaces an existing file.
+- `os.WindowsRemove(path)` deletes a file or an empty directory.
+
 ## Input scanning and files
 
 Recoverable standard-library I/O failures return `Result<T>`. Use `.unwrap()` to
