@@ -4,7 +4,7 @@ import "os";
 
 struct Size { Width int; Height int; }
 struct savedTerminal { file os.File; state settings; active bool; }
-saved: savedTerminal[];
+saved: []savedTerminal;
 
 func failure(status int) string {
     if (status == -4096) return "terminal operations are unsupported on this architecture/platform";
@@ -111,10 +111,10 @@ func Restore(file os.File) Result<bool> {
 }
 
 func readLine(file os.File) Result<string> {
-    bytes := i8[]{};
+    bytes := []i8{};
     for (;;) {
         read := file.Readchunk(1);
-        if (read == Result<i8[]>.error) return Result<string>.error(read.(Result<i8[]>.error));
+        if (read == Result<[]i8>.error) return Result<string>.error(read.(Result<[]i8>.error));
         chunk := read.unwrap();
         if (len(chunk) == 0 || chunk[0] == 10) break;
         if (platform() == 3 && chunk[0] == 13) continue;

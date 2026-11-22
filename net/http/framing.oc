@@ -61,7 +61,7 @@ func chunkEnd(text string) Result<int> {
         if (len(line) == 0) return Result<int>.error("http: invalid chunk size");
         size := 0;
         for (_, c := range lower(line)) {
-            digit := index("0123456789abcdef", i8[]{c} -> string);
+            digit := index("0123456789abcdef", []i8{c} -> string);
             if (digit < 0 || size > (9223372036854775807 - digit) / 16) return Result<int>.error("http: invalid chunk size");
             size = size * 16 + digit;
         }

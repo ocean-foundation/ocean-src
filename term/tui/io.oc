@@ -2,7 +2,7 @@ package tui;
 
 import "os";
 
-struct ReadMsg { Bytes i8[]; End bool; }
+struct ReadMsg { Bytes []i8; End bool; }
 struct WriteMsg { Bytes int; }
 
 // Use streams opened before Run; each stream must have a single reader/writer.
@@ -11,7 +11,7 @@ func Read(file os.File, count int) Cmd {
     if (count <= 0) panic "tui.Read requires a positive byte count";
     return func() Msg {
         read := file.Readchunk(count);
-        if (read == Result<i8[]>.error) return ErrorMsg{read.(Result<i8[]>.error)};
+        if (read == Result<[]i8>.error) return ErrorMsg{read.(Result<[]i8>.error)};
         bytes := read.unwrap();
         return ReadMsg{bytes, len(bytes) == 0};
     };

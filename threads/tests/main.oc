@@ -153,7 +153,7 @@ func main() {
         mutex: sync.Mutex;
         done: sync.WaitGroup;
         done.Add(12);
-        ids := int[]{};
+        ids := []int{};
         for (i := 0; i < 12; i++) {
             id := threads.Spawn(func() {
                 defer done.Done();
@@ -263,14 +263,14 @@ func main() {
         gate: sync.WaitGroup;
         gate.Add(1);
         target := threads.Spawn(func() { gate.Wait(); });
-        ids := int[]{};
+        ids := []int{};
         for (i := 0; i < 8; i++) ids.append(threads.Spawn(func() { threads.Await(target); }));
         gate.Done();
         for (index, id := range ids) threads.Await(id);
         threads.Await(target);
     }
     if (mode == "closures") {
-        ids := int[]{};
+        ids := []int{};
         for (i := 0; i < 8; i++) ids.append(threads.Spawn(func() {
             for (j := 0; j < 1000; j++) {
                 text := "hello";

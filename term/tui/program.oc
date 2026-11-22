@@ -17,6 +17,8 @@ struct Options {
     Headless bool;
     // Alternate screen is opt-in. The default redraws from the current line.
     AltScreen bool;
+    // Enable button, wheel, and drag reports using SGR terminal mouse input.
+    Mouse bool;
 }
 struct commandFailure { error string; }
 struct Program {
@@ -28,7 +30,7 @@ struct Program {
     messages map[int]Msg;
     head int;
     tail int;
-    workers int[];
+    workers []int;
     running bool;
     finished bool;
 }
@@ -84,7 +86,7 @@ func (program *Program) execute(command Cmd) {
             for (i := 0; i < len(value.commands); i++) program.execute(value.commands[i]);
             return;
         case batchMsg:
-            children := int[]{};
+            children := []int{};
             defer stopWorkers(&children);
             for (i := 0; i < len(value.commands); i++) {
                 child := value.commands[i];
@@ -95,7 +97,7 @@ func (program *Program) execute(command Cmd) {
     }
     program.Send(message);
 }
-func stopWorkers(workers *int[]) {
+func stopWorkers(workers *[]int) {
     for (i := 0; i < len(*workers); i++) threads.Kill((*workers)[i]);
     for (i := 0; i < len(*workers); i++) threads.Await((*workers)[i]);
 }
@@ -116,8 +118,9 @@ func (program *Program) finish() {
 }
 
 func restore(input os.File) { term.Restore(input).unwrap(); }
+func leaveMouse(output os.File) { output.Write("\x1b[?1002l\x1b[?1006l").unwrap(); }
 func leaveScreen(output os.File, alternate bool) {
-    output.Write(alternate ? "\x1b[?25h\x1b[?1049l" : "\x1b[?25h\r\n").unwrap();
+    output.Write("\x1b[?2026l"+(alternate ? "\x1b[?25h\x1b[?1049l" : "\x1b[?25h\r\n")).unwrap();
 }
 // Run is single-use. Init, Update, and View run serially on the calling thread.
 // All workers are cancelled and joined before returning or unwinding a panic.
@@ -159,6 +162,11 @@ func (program *Program) Run() Result<Model> {
         defer leaveScreen(output, program.options.AltScreen);
         entered := output.Write(program.options.AltScreen ? "\x1b[?1049h\x1b[?25l\x1b[H\x1b[2J" : "\x1b[?25l");
         if (entered == Result<int>.error) return Result<Model>.error(entered.(Result<int>.error));
+        if (program.options.Mouse) {
+            defer leaveMouse(output);
+            enabledMouse := output.Write("\x1b[?1006h\x1b[?1002h");
+            if (enabledMouse == Result<int>.error) return Result<Model>.error(enabledMouse.(Result<int>.error));
+        }
         program.Send(WindowSizeMsg{size.Width, size.Height});
     }
     // The owning slot also releases replaced model snapshots between updates.
@@ -192,7 +200,7 @@ func (program *Program) Run() Result<Model> {
         if (dirty && !program.options.Headless) {
             view := state[0].View();
             if (view != lastView[0] || forcePaint) {
-                painted := render(output, view, rows, program.options.AltScreen, size);
+                painted := render(output, view, lastView[0], rows, program.options.AltScreen, size, forcePaint);
                 if (painted == Result<int>.error) return Result<Model>.error(painted.(Result<int>.error));
                 rows = painted.unwrap(); lastView[0] = view;
                 forcePaint = false;
@@ -206,7 +214,7 @@ func (program *Program) Run() Result<Model> {
                     if (ready == Result<int>.error) return Result<Model>.error(ready.(Result<int>.error));
                     if (ready.unwrap() == 0) break;
                     read := input.Readchunk(1);
-                    if (read == Result<i8[]>.error) return Result<Model>.error(read.(Result<i8[]>.error));
+                    if (read == Result<[]i8>.error) return Result<Model>.error(read.(Result<[]i8>.error));
                     bytes := read.unwrap();
                     if (len(bytes) == 0) { ended = true; break; }
                     else { decoder.pending.append(bytes[0]); decoder.idle = 0; }

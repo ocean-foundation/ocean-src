@@ -72,8 +72,8 @@ func exchange(client Client, request Request, wire string, deadline int) Result<
     easy := extern.curl_easy_init();
     if ((easy -> int) == 0) return Result<Response>.error("http: transport allocation failed");
     defer extern.curl_easy_cleanup(easy);
-    url := (request.URL + "\0") -> i8[];
-    ca := (client.TLSClientConfig.RootCAFile + "\0") -> i8[];
+    url := (request.URL + "\0") -> []i8;
+    ca := (client.TLSClientConfig.RootCAFile + "\0") -> []i8;
     if (index(client.TLSClientConfig.RootCAFile, "\0") >= 0) return Result<Response>.error("http: root CA path contains NUL");
     if (extern.curl_easy_setopt(easy, optURL, url.data) != 0 ||
         extern.curl_easy_setopt(easy, optProxy, "\0".data) != 0 ||
@@ -116,18 +116,28 @@ func exchange(client Client, request Request, wire string, deadline int) Result<
         }
     }
     if (!finished) return Result<Response>.error("http: incomplete connection");
-    bytes := wire -> i8[]; sent := 0;
-    for (sent < len(bytes)) {
+    // Send headers and body separately. Concatenating them would do an
+    // uninterruptible element-by-element copy of a potentially large body.
+    for (segment := 0; segment < 2; segment++) {
         reason = interruption(request.Cancel, deadline);
         if (reason != "") return Result<Response>.error(reason);
-        part := bytes[sent:]; count: uint;
-        status := extern.curl_easy_send(easy, part.data, len(part) -> uint, &count);
-        if (status == curlAgain) { time.Sleep(pollBudget(deadline) -> int * time.Millisecond); continue; }
-        if (status != 0 || count == 0) return Result<Response>.error("http: send failed");
-        sent += count -> int;
+        bytes := (segment == 0 ? wire : request.Body) -> []i8; sent := 0;
+        for (sent < len(bytes)) {
+            reason = interruption(request.Cancel, deadline);
+            if (reason != "") return Result<Response>.error(reason);
+            // Slices own their bytes. Retrying with bytes[sent:] would copy the
+            // entire unsent body while a blocked peer prevents forward progress.
+            // Borrow a bounded chunk so cancellation is checked between sends.
+            size := len(bytes) - sent; if (size > 65536) size = 65536;
+            data := (&bytes[sent]) -> (buffer<i8>); count: uint;
+            status := extern.curl_easy_send(easy, data, size -> uint, &count);
+            if (status == curlAgain) { time.Sleep(pollBudget(deadline) -> int * time.Millisecond); continue; }
+            if (status != 0 || count == 0) return Result<Response>.error("http: send failed");
+            sent += count -> int;
+        }
     }
     limit := client.MaxResponseBytes > 0 ? client.MaxResponseBytes : 16777216;
-    output := i8[]{}; chunk: i8[16384];
+    output := []i8{}; chunk: [16384]i8;
     for (;;) {
         reason = interruption(request.Cancel, deadline);
         if (reason != "") return Result<Response>.error(reason);

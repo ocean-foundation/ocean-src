@@ -10,7 +10,7 @@ func TestHeader(t *testing.T) {
 }
 func TestRequestValidation(t *testing.T) {
     if (NewRequest("", "http://localhost?x=1#fragment", "").unwrap().Method != "GET") t.Fatal("default method");
-    cases := string[]{"http://", "http://user@host", "http://host:0", "http://host:65536", "http://host/path with spaces", "http://host/\r\nX:yes"};
+    cases := []string{"http://", "http://user@host", "http://host:0", "http://host:65536", "http://host/path with spaces", "http://host/\r\nX:yes"};
     for (_, url := range cases) { if (!NewRequest("GET", url, "").hasError()) t.Fatalf("accepted {}", url); }
     if (!NewRequest("GET\r\n", "http://localhost", "").hasError()) t.Fatal("method injection");
 }
@@ -24,7 +24,7 @@ func TestResponseParsing(t *testing.T) {
     if (parseResponse("HTTP/1.1 200 OK\r\nContent-Length: 99\r\n\r\n", true).unwrap().Body != "") t.Fatal("HEAD");
 }
 func TestMalformedResponses(t *testing.T) {
-    cases := string[]{"", "garbage\r\n\r\n", "HTTP/1.1 200 OK\r\nBad Header: yes\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhi", "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\nhi", "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 0\r\n\r\n", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx"};
+    cases := []string{"", "garbage\r\n\r\n", "HTTP/1.1 200 OK\r\nBad Header: yes\r\n\r\n", "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhi", "HTTP/1.1 200 OK\r\nContent-Length: 1\r\nContent-Length: 2\r\n\r\nhi", "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Length: 0\r\n\r\n", "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nx"};
     for (_, wire := range cases) { if (!parseResponse(wire, false).hasError()) t.Fatalf("accepted malformed response {}", wire); }
 }
 func TestPreflightErrors(t *testing.T) {
@@ -78,7 +78,7 @@ func TestCustomTransport(t *testing.T) {
     if (result.hasError() || result.unwrap().Body != "custom") t.Fatal("RoundTripper dispatch");
 }
 func TestHeaderFramingValidation(t *testing.T) {
-    cases := string[]{
+    cases := []string{
         "HTTP/1.1 200 OK\r\nContent-Length: \r\n\r\n",
         "HTTP/1.1 200 OK\r\nContent-Length: nope\r\n\r\n",
         "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nTransfer-Encoding: chunked\r\n\r\n",

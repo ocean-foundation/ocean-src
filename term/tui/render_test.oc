@@ -12,7 +12,7 @@ struct frameTest {
 
 func TestFrameClippingAndStyles(t *testing.T) {
     t.Parallel();
-    tests := frameTest[]{
+    tests := []frameTest{
         {"UTF-8 clipping styles and height", "\x1b[31mab界cd\x1b[0m\nnext\nignored", term.Size{Width:5,Height:2}, "\x1b[31mab界\x1b[0m\r\nnext\x1b[0m", 1},
         {"tabs and control sanitization", "a\tb\x1b[2J!", term.Size{Width:12,Height:1}, "a       b!\x1b[0m", 0},
     };
@@ -25,4 +25,38 @@ func TestFrameClippingAndStyles(t *testing.T) {
             }
         });
     }
+}
+
+func hasPaint(text string, fragment string) bool {
+    for (i := 0; i+len(fragment) <= len(text); i++) if (text[i:i+len(fragment)] == fragment) return true;
+    return false;
+}
+func TestPaintOnlyChangedRows(t *testing.T) {
+    painted, rows := paint("one\nTWO\nthree","one\ntwo\nthree",2,true,term.Size{Width:30,Height:8},false);
+    if (rows != 2 || !hasPaint(painted,"\x1b[2;1H") || hasPaint(painted,"\x1b[1;1H") || hasPaint(painted,"\x1b[3;1H")) t.Fatal("Only the changed row should be painted");
+    if (hasPaint(painted,"\x1b[J") || hasPaint(painted,"\x1b[2J")) t.Fatal("Painting must not clear the viewport");
+    if (!hasPaint(painted,"\x1b[?2026h") || !hasPaint(painted,"\x1b[?2026l")) t.Fatal("Each paint must be synchronized");
+}
+func TestPaintUnchangedAndClippedViews(t *testing.T) {
+    painted, rows := paint("abcdNEW","abcdOLD",0,true,term.Size{Width:5,Height:8},false);
+    if (painted != "" || rows != 0) t.Fatal("Changes outside the visible viewport should not paint");
+    same, ignored := paint("same\nview","same\nview",1,true,term.Size{Width:20,Height:8},false);
+    if (same != "") t.Fatal("Unchanged views should emit no bytes");
+}
+func TestPaintInheritedStyles(t *testing.T) {
+    painted, rows := paint("\x1b[32mfirst\nsecond","\x1b[31mfirst\nsecond",1,true,term.Size{Width:20,Height:8},false);
+    if (!hasPaint(painted,"\x1b[2;1H\x1b[0m\x1b[32msecond")) t.Fatal("Inherited style changes must repaint subsequent rows");
+    updated, ignored := paint("\x1b[1mfirst\n界x","\x1b[1mfirst\n界y",1,true,term.Size{Width:20,Height:8},false);
+    if (hasPaint(updated,"first") || !hasPaint(updated,"\x1b[1m界x")) t.Fatal("Changed Unicode rows must retain inherited styles without painting unchanged rows");
+}
+func TestPaintShrinkAndForce(t *testing.T) {
+    painted, rows := paint("short","a much longer line\nstale\nremoved",2,true,term.Size{Width:30,Height:8},false);
+    if (rows != 0 || !hasPaint(painted,"short") || !hasPaint(painted,"\x1b[K") || !hasPaint(painted,"\x1b[2;1H\x1b[0m\x1b[K") || !hasPaint(painted,"\x1b[3;1H\x1b[0m\x1b[K")) t.Fatal("Shrinking views must erase stale columns and rows");
+    forced, ignored := paint("same","same",0,true,term.Size{Width:10,Height:3},true);
+    if (!hasPaint(forced,"\x1b[1;1H") || !hasPaint(forced,"\x1b[3;1H")) t.Fatal("Resize must force repaint and clear stale rows");
+}
+func TestInlinePaintsBeforeErase(t *testing.T) {
+    painted, rows := paint("new\nview","old\nview",1,false,term.Size{Width:20,Height:8},false);
+    expected := "\x1b[?2026h\r\x1b[1A\x1b[0mnew\r\nview\x1b[0m\x1b[0m\x1b[J\x1b[?2026l";
+    if (painted != expected || rows != 1) t.Fatal("Inline rendering must retain its anchor and erase only after painting");
 }

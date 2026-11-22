@@ -15,7 +15,7 @@ func quote(text string) string {
         if (c == '"') out += "\\\"";
         else if (c == '\\') out += "\\\\";
         else if (b < 32) out += "\\u00" + hex[b / 16:b / 16 + 1] + hex[b % 16:b % 16 + 1];
-        else out += (i8[]{c} -> string);
+        else out += ([]i8{c} -> string);
     }
     return out + "\"";
 }
@@ -64,17 +64,17 @@ func encode(value any, depth int) Result<string> {
                     return Result<string>.value(text);
                 default: return Result<string>.error("json: invalid Number");
             }
-        case string[]:
-            items := value.(string[]); return encodeArray<string>(items.array(), depth);
-        case int[]:
-            items := value.(int[]); return encodeArray<int>(items.array(), depth);
-        case float[]:
-            items := value.(float[]); return encodeArray<float>(items.array(), depth);
-        case bool[]:
-            items := value.(bool[]); return encodeArray<bool>(items.array(), depth);
-        case mixed any[]:
+        case []string:
+            items := value.([]string); return encodeArray<string>(items.array(), depth);
+        case []int:
+            items := value.([]int); return encodeArray<int>(items.array(), depth);
+        case []float:
+            items := value.([]float); return encodeArray<float>(items.array(), depth);
+        case []bool:
+            items := value.([]bool); return encodeArray<bool>(items.array(), depth);
+        case mixed []any:
             out := "[";
-            for (i, item := range value.(mixed any[])) {
+            for (i, item := range value.(mixed []any)) {
                 encoded := encode(item, depth + 1);
                 if (encoded.hasError()) return encoded;
                 out += (i == 0 ? "" : ",") + encoded.unwrap();
@@ -83,7 +83,7 @@ func encode(value any, depth int) Result<string> {
         case map[string]any:
             out := "{";
             first := true;
-            obj := value.(map[string]any); keys := string[]{};
+            obj := value.(map[string]any); keys := []string{};
             for (key := range obj) keys.append(key);
             for (i := 1; i < len(keys); i++) {
                 for (j := i; j > 0 && keys[j] < keys[j - 1]; j--) {
@@ -120,7 +120,7 @@ func (p *parser) take(c i8) bool {
     return false;
 }
 func utf8(code int) string {
-    b := i8[]{};
+    b := []i8{};
     if (code < 128) b.append(code -> i8);
     else if (code < 2048) { b.append((192 | (code >> 6)) -> i8); b.append((128 | (code & 63)) -> i8); }
     else if (code < 65536) {
@@ -152,15 +152,15 @@ func (p *parser) stringValue() Result<string> {
         c := p.text[p.pos]; p.pos++;
         if (c == '"') return Result<string>.value(out);
         if ((c -> u8) < 32) return Result<string>.error("json: control character in string");
-        if (c != '\\') { out += (i8[]{c} -> string); continue; }
+        if (c != '\\') { out += ([]i8{c} -> string); continue; }
         if (p.pos == len(p.text)) break;
         c = p.text[p.pos]; p.pos++;
         switch (c) {
             case '"': out += "\"";
             case '\\': out += "\\";
             case '/': out += "/";
-            case 'b': out += (i8[]{8} -> string);
-            case 'f': out += (i8[]{12} -> string);
+            case 'b': out += ([]i8{8} -> string);
+            case 'f': out += ([]i8{12} -> string);
             case 'n': out += "\n";
             case 'r': out += "\r";
             case 't': out += "\t";
@@ -204,7 +204,7 @@ func (p *parser) value(depth int) Result<any> {
         return Result<any>.value(obj);
     }
     if (p.take('[')) {
-        items: mixed any[] = {}; p.space();
+        items: mixed []any = {}; p.space();
         if (p.take(']')) return Result<any>.value(items);
         for (;;) {
             r := p.value(depth + 1); if (r.hasError()) return r;

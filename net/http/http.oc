@@ -1,9 +1,9 @@
 package http;
 import "io";
 
-struct Header { values map[string]string[]; }
+struct Header { values map[string][]string; }
 func lower(s string) string {
-    bytes := s -> i8[];
+    bytes := s -> []i8;
     for (i := 0; i < len(bytes); i++) { if (bytes[i] >= 'A' && bytes[i] <= 'Z') bytes[i] += 32; }
     return bytes -> string;
 }
@@ -17,10 +17,10 @@ func index(s string, needle string) int {
     for (i := 0; i <= len(s) - len(needle); i++) { if (s[i:i + len(needle)] == needle) return i; }
     return -1;
 }
-func (h *Header) Set(key string, value string) { h.values[lower(key)] = string[]{value}; }
+func (h *Header) Set(key string, value string) { h.values[lower(key)] = []string{value}; }
 func (h *Header) Add(key string, value string) {
     k := lower(key); values, ok := h.values[k];
-    if (!ok) values = string[]{};
+    if (!ok) values = []string{};
     values.append(value); h.values[k] = values;
 }
 func (h Header) Get(key string) string {
@@ -28,9 +28,9 @@ func (h Header) Get(key string) string {
     if (!ok || len(values) == 0) return "";
     return values[0];
 }
-func (h Header) Values(key string) string[] {
+func (h Header) Values(key string) []string {
     values, ok := h.values[lower(key)];
-    if (!ok) return string[]{};
+    if (!ok) return []string{};
     return values;
 }
 func (h *Header) Del(key string) { delete(h.values, lower(key)); }
@@ -43,7 +43,7 @@ struct TLSConfig { RootCAFile string; }
 func token(text string) bool {
     if (len(text) == 0) return false;
     for (_, c := range text) {
-        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || index("!#$%&'*+-.^_`|~", i8[]{c} -> string) >= 0)) return false;
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || index("!#$%&'*+-.^_`|~", []i8{c} -> string) >= 0)) return false;
     }
     return true;
 }
@@ -108,7 +108,9 @@ func (c Client) Do(request Request) Result<Response> {
             wire += key + ": " + value + "\r\n";
         }
     }
-    wire += "\r\n" + request.Body;
+    // Keep the body separate: building one large string copies every body byte
+    // before the native transport can observe cancellation or the deadline.
+    wire += "\r\n";
     if (c.Transport != null) {
         result := c.Transport.RoundTrip(request);
         reason = interruption(request.Cancel, deadline);
@@ -138,7 +140,7 @@ func unchunk(text string) Result<string> {
         if (len(line) == 0) return Result<string>.error("http: invalid chunk size");
         size := 0;
         for (_, c := range lower(line)) {
-            n := index("0123456789abcdef", i8[]{c} -> string);
+            n := index("0123456789abcdef", []i8{c} -> string);
             if (n < 0 || size > (len(text) - n) / 16) return Result<string>.error("http: invalid chunk size");
             size = size * 16 + n;
         }

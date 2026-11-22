@@ -46,3 +46,7 @@ field, and unit variants return no fields. The same deep-copy rules apply.
 `io.Print`, `io.Println`, `io.Sprint`, and formatted output use this reflection
 to print enums recursively: `Event.Load`, `Event.Key(65)`, and
 `Event.Click(x: 2, y: 3)`. Fixed payloads print as `Number.One(1)`.
+
+`VarIntegerDecimal(value any)` returns exact decimal text for `varint(n)` and
+`varuint(n)`, including named types with either representation. It returns an empty
+string for other values. The `io` print and formatting functions use it automatically.

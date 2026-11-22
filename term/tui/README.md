@@ -78,7 +78,12 @@ order. QuitMsg is processed in that order and pending messages may be discarded.
 current line. `AltScreen: true` uses the alternate screen and restores the
 previous screen on exit. `Headless: true` disables terminal input, size messages,
 raw mode, View calls, and rendering, allowing command-only applications and tests
-without a terminal. Headless takes precedence over AltScreen.
+without a terminal. Headless takes precedence over AltScreen and Mouse.
+
+`Mouse: true` enables SGR button, wheel, and drag reporting (terminal modes
+1006 and 1002). Reporting is disabled on exit, including errors and ordinary
+panic unwinding. Mouse reporting is off by default. Terminal support is required;
+Windows requires a terminal that supplies SGR reports through VT input.
 
 Only one terminal program may own a terminal at a time. Do not read stdin or
 write stdout elsewhere while Run owns them. Use View for terminal output.
@@ -121,7 +126,7 @@ Custom commands can perform I/O and return any application-defined message:
 func load(file os.File) tui.Cmd {
     return func() tui.Msg {
         result := file.Readchunk(4096);
-        if (result == Result<i8[]>.error) return tui.ErrorMsg{result.(Result<i8[]>.error)};
+        if (result == Result<[]i8>.error) return tui.ErrorMsg{result.(Result<[]i8>.error)};
         return tui.ReadMsg{Bytes: result.unwrap()};
     };
 }
@@ -140,6 +145,7 @@ responsibility. Normal I/O failures become ErrorMsg, not automatic termination.
 | Message | Fields and meaning |
 | --- | --- |
 | `KeyMsg` | `Key string`, `Text string`, `Alt bool`. Text contains one UTF-8 scalar for printable input; other keys have empty Text. |
+| `MouseMsg` | `X int`, `Y int` are zero-based terminal cell coordinates; `Button string`, `Action string`, and `Shift`, `Alt`, `Ctrl bool` describe the event. |
 | `WindowSizeMsg` | `Width int`, `Height int` in terminal cells; initially queued before Init results, then when dimensions change. |
 | `ReadMsg` | `Bytes i8[]`, `End bool`; empty successful read reports End. A short nonempty read does not imply EOF. |
 | `WriteMsg` | `Bytes int` successfully written. |
@@ -157,12 +163,27 @@ buffered; a lone Escape waits about 30ms. Invalid UTF-8 yields replacement
 characters. Unrecognized escape sequences produce `Key: "unknown"`.
 Ctrl+C is a KeyMsg in raw mode; handle it explicitly to quit.
 
+Mouse actions are `press`, `release`, `motion`, and `scroll`. Buttons are
+`left`, `middle`, `right`, or `none`; scroll buttons are directions `up`, `down`,
+`left`, or `right`. Motion is reported while a button is held. Coordinates refer
+to the whole terminal, including for inline views; applications handle hit testing.
+SGR reports are buffered across reads. Unsupported or malformed reports produce
+an `unknown` key. Extra mouse buttons and legacy X10 reports are unsupported.
+
 Sizing is polled approximately every 100ms, without installing signal handlers.
+Alternate-screen views repaint only changed styled rows. Resizing forces a full
+repaint; shorter rows and removed rows clear their stale content after painting.
+Inline views repaint from their original anchor, also erasing stale content after
+painting. Neither path clears the viewport before painting a replacement frame.
+Each update is wrapped in synchronized output mode 2026 so terminals that support
+it can display the frame atomically; other terminals still benefit from reduced
+painting. Normal exit and error cleanup disable synchronized output.
+
 Views redraw when changed or resized, clear stale content, translate newlines
 to CRLF, and accept SGR color/style escapes. Other control characters are
 filtered. The viewport clips excess lines and columns, reserving the last
 column to avoid autowrap. Common combining and East Asian widths are estimated;
-full grapheme/emoji layout, mouse input, bracketed paste, focus events, and
+full grapheme/emoji layout, bracketed paste, focus events, and
 extended keyboard protocols are not implemented.
 
 ## Platforms and tests

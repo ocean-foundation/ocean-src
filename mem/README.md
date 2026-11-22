@@ -12,7 +12,7 @@ pointers. Negative counts panic.
 import "mem";
 
 // Shift the first three bytes one position to the right.
-data: u8[4] = {1, 2, 3, 4};
+data: [4]u8 = {1, 2, 3, 4};
 mem.Copy(&data[0], &data[1], 3); // data is now {1, 1, 2, 3}
 ```
 

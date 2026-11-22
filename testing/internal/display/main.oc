@@ -26,16 +26,16 @@ func readEvents() tui.Msg {
     ready := extern.poll(&descriptor, 1->uint, 50->i32);
     if (ready < 0) return endMsg{};
     if (ready == 0) return chunkMsg{""};
-    bytes: i8[4096];
+    bytes: [4096]i8;
     count := extern.read(197->i32, bytes.data, 4096->uint);
     if (count <= 0) return endMsg{};
-    text := i8[]{};
+    text := []i8{};
     for (i := 0; i < count; i++) text.append(bytes[i]);
     return chunkMsg{text->string};
 }
-func split(text string, delimiter i8) string[] {
-    result := string[]{};
-    word := i8[]{};
+func split(text string, delimiter i8) []string {
+    result := []string{};
+    word := []i8{};
     for (i := 0; i < len(text); i++) {
         if (text[i] == delimiter) { result.append(word->string); word = {}; }
         else word.append(text[i]);
@@ -44,7 +44,7 @@ func split(text string, delimiter i8) string[] {
     return result;
 }
 func unhex(text string) string {
-    result := i8[]{};
+    result := []i8{};
     for (i := 0; i + 1 < len(text); i += 2) {
         a := text[i]->int; b := text[i + 1]->int;
         a = a >= 'a' ? a - 'a' + 10 : a - '0';
@@ -59,7 +59,7 @@ struct display {
     packageName string;
     color bool;
     showSkipped bool;
-    rows testRow[];
+    rows []testRow;
     indexes map[string]int;
     pending string;
     packageOutput string;
@@ -209,14 +209,14 @@ func (model *display) icon(status string) string {
     if (status == "fail") return model.style("✗", "31");
     if (status == "skip") return model.style("∅", "33");
     if (status == "pause") return model.style("⏸", "36");
-    frames := string[8]{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"};
+    frames := [8]string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"};
     return model.style(frames[model.frame % 8], model.failed ? "31" : "32");
 }
 func (model *display) View() string {
     if (model.cleared) return "";
     width := model.width > 1 ? model.width - 1 : 79;
     height := model.height > 5 ? model.height : 24;
-    counts := int[6]{0, 0, 0, 0, 0, 0};
+    counts := [6]int{0, 0, 0, 0, 0, 0};
     packages := 0;
     for (i := 0; i < len(model.rows); i++) {
         if (model.rows[i].packageRow) { packages++; continue; }
@@ -225,8 +225,8 @@ func (model *display) View() string {
         counts[column]++;
     }
     counts[5] = counts[2] + counts[3] + counts[4];
-    widths := int[6]{1, 1, 1, 1, 1, 1};
-    styles := string[6]{"1;97", "36", "32", "31", "33", ""};
+    widths := [6]int{1, 1, 1, 1, 1, 1};
+    styles := [6]string{"1;97", "36", "32", "31", "33", ""};
     countText := "";
     countCells := 0;
     for (i := 0; i < 6; i++) {
@@ -244,12 +244,12 @@ func (model *display) View() string {
     if (packages > 0 && !model.finished) state = "(" + io.Sprint(packages) + " packages)";
     prefix := model.icon(model.finished ? (model.failed ? "fail" : "pass") : "run");
     result := prefix + " " + fit(state, labelWidth - 2) + "  " + countText + "  " + duration + "\n";
-    headers := string[6]{"▶", "⏸", "✓", "✗", "∅", "∑"};
+    headers := [6]string{"▶", "⏸", "✓", "✗", "∅", "∑"};
     rule := repeat("─", labelWidth + widths[0]) + " " + model.style(headers[0], styles[0]);
     for (i := 1; i < 6; i++) rule += " " + repeat("─", widths[i]) + " " + model.style(headers[i], styles[i]);
     result += rule + " " + repeat("─", cells(duration) + 1) + "\n";
     result += prefix + " " + fit(model.packageName, labelWidth - 2) + "  " + countText + "  " + duration + "\n";
-    lines := string[]{};
+    lines := []string{};
     folded := "";
     for (i := 0; i < len(model.rows); i++) {
         row := model.rows[i];
@@ -267,7 +267,7 @@ func (model *display) View() string {
         if (!active && !row.packageRow && row.status != "pause") right = "(" + right + ")";
         style := row.status == "fail" ? "31" : (row.status == "skip" ? "33" : (row.status == "pause" ? "36" : (active ? "1" : "")));
         if (row.packageRow) {
-            values := int[6]{0, 0, 0, 0, 0, 0};
+            values := [6]int{0, 0, 0, 0, 0, 0};
             for (j := 0; j < len(model.rows); j++) {
                 child := model.rows[j];
                 if (child.packageRow || !descendant(child.name, row.name)) continue;

@@ -1,0 +1,28 @@
+package io_test;
+
+import "io";
+import "reflect";
+import "testing";
+
+type Nibble varint(4);
+type Wide varuint(65);
+struct Record { number varint(65); }
+enum Wrapped { Number(Wide), }
+
+func TestVarIntegerPrinting(t *testing.T) {
+    oneBit: varint(1) = -1;
+    zeroValue: varuint(1) = 0;
+    minimum: varint(65) = -18446744073709551616;
+    maximum: varuint(65) = 36893488147419103231;
+    large: varuint(257) = 231584178474632390847141970017375815706539969331281128078915168015826259279871;
+    if (io.Sprint(oneBit, zeroValue, -8->Nibble, minimum, maximum->Wide) != "-1 0 -8 -18446744073709551616 36893488147419103231")
+        t.Fatal("variable-width integer output");
+    if (io.Sprintf("{}", large).unwrap() != "231584178474632390847141970017375815706539969331281128078915168015826259279871")
+        t.Fatal("257-bit integer output");
+    if (io.Sprint(Record{minimum}) != "{number: -18446744073709551616}")
+        t.Fatal("variable-width struct field");
+    if (io.Sprint(Wrapped.Number(maximum->Wide)) != "Wrapped.Number(36893488147419103231)")
+        t.Fatal("variable-width enum payload");
+    if (reflect.VarIntegerDecimal(maximum->Wide) != "36893488147419103231" || reflect.VarIntegerDecimal(42) != "")
+        t.Fatal("variable-width reflection");
+}

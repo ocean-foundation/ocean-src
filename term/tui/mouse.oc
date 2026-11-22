@@ -1,0 +1,41 @@
+package tui;
+
+// SGR reports use one-based terminal cells; application messages use zero-based
+// terminal coordinates, including when rendering inline below existing output.
+func mouse(sequence string) (MouseMsg, bool) {
+    event: MouseMsg;
+    bytes := sequence -> []i8;
+    if (len(bytes) < 8 || bytes[0] != 91 || bytes[1] != 60) return event, false;
+    final := bytes[len(bytes)-1];
+    if (final != 77 && final != 109) return event, false;
+    values := [3]int{};
+    field := 0;
+    digits := 0;
+    for (i := 2; i < len(bytes)-1; i++) {
+        byte := bytes[i];
+        if (byte == 59) {
+            if (digits == 0 || field >= 2) return event, false;
+            field++; digits = 0;
+        } else {
+            if (byte < 48 || byte > 57 || values[field] > 214748363) return event, false;
+            values[field] = values[field] * 10 + (byte -> int) - 48;
+            digits++;
+        }
+    }
+    if (field != 2 || digits == 0 || values[1] < 1 || values[2] < 1) return event, false;
+    code := values[0];
+    if (code > 255) return event, false;
+    event.X = values[1] - 1; event.Y = values[2] - 1;
+    event.Shift = (code & 4) != 0;
+    event.Alt = (code & 8) != 0;
+    event.Ctrl = (code & 16) != 0;
+    button := code & 3;
+    event.Button = button == 0 ? "left" : (button == 1 ? "middle" : (button == 2 ? "right" : "none"));
+    event.Action = final == 109 ? "release" : "press";
+    if ((code & 128) != 0) return event, false;
+    if ((code & 64) != 0) {
+        event.Action = "scroll";
+        event.Button = button == 0 ? "up" : (button == 1 ? "down" : (button == 2 ? "left" : "right"));
+    } else if ((code & 32) != 0) event.Action = "motion";
+    return event, true;
+}

@@ -14,7 +14,7 @@ struct testJob { name string; callback func(*T); }
 struct T {
     gate sync.Mutex;
     parent *T;
-    pending childTask[];
+    pending []childTask;
     cleaning bool;
     signaled bool;
     parallel bool;
@@ -26,8 +26,8 @@ struct T {
     name string;
     failed bool;
     skipped bool;
-    cleanups cleanupCallback[];
-    children string[];
+    cleanups []cleanupCallback;
+    children []string;
 }
 struct clockValue { seconds int; nanos int; }
 extern i32 timespec_get(*clockValue value, i32 base);
@@ -35,9 +35,9 @@ extern int read(i32 fd, buffer<i8> bytes, uint count);
 extern int write(i32 fd, buffer<i8> bytes, uint count);
 lock: sync.Mutex;
 failures: int;
-testNames: string[];
+testNames: []string;
 poolGate: sync.Mutex;
-jobs: testJob[];
+jobs: []testJob;
 workerCount: int;
 serialDone: bool;
 
@@ -75,7 +75,7 @@ func event(action string, name string, output string, elapsed int) {
         ",\"Output\":" + quote(output) + ",\"Elapsed\":" + duration(elapsed) + "}\n";
     lock.Lock();
     defer lock.Unlock();
-    bytes := text->i8[];
+    bytes := text->[]i8;
     for (offset := 0; offset < len(bytes);) {
         n := extern.write(198->i32, (&bytes[offset])->(buffer<i8>), (len(bytes) - offset)->uint);
         if (n <= 0) panic "test event stream closed";
@@ -126,7 +126,7 @@ func clean(t *T) {
 }
 func acquire(t *T) {
     event("acquire", "", "", 0);
-    byte: i8[1];
+    byte: [1]i8;
     for (extern.read(199->i32, byte.data, 1->uint) != 1) time.Sleep(time.Millisecond);
     t.slot = true;
 }
@@ -243,7 +243,7 @@ func RunTest(name string, callback func(*T)) {
     jobs.append(testJob{name, callback});
 }
 func Finish() int {
-    tasks := childTask[]{};
+    tasks := []childTask{};
     for (i := 0; i < len(jobs); i++) {
         job := jobs[i];
         t := new(T); t.name = job.name; t.parent = null;
