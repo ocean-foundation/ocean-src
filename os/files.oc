@@ -5,17 +5,7 @@ enum FileMode {
     Binary, BinaryWrite, BinaryReadWrite, BinaryAppend, BinaryReadAppend
 }
 
-func nativeWindows() bool {
-    result := 0;
-    asm x86_64/windows {
-        mov qword ptr ${result}, 1
-    }
-    asm aarch64/windows {
-        mov x0, #1
-        str x0, ${result}
-    }
-    return result != 0;
-}
+func nativeWindows() bool { return OS() == "windows"; }
 
 // Convert a UTF-8 path to a NUL-terminated little-endian UTF-16 byte array.
 func widePath(path string) Result<[]i8> {
