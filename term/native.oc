@@ -1,5 +1,5 @@
 package term;
-import "runtime";
+import "os";
 
 // Kernel ABI: Linux termios (36 bytes), Darwin termios (72 bytes), or a
 // Win32 console mode DWORD. Nine contiguous 64-bit words preserve all 72
@@ -8,10 +8,10 @@ struct settings { a, b, c, d, e, f, g, h, i int; }
 
 // 1 Linux, 2 macOS, 3 Windows, 0 unsupported (Wasm).
 func platform() int {
-    os := runtime.OS();
-    if (os == "linux") return 1;
-    if (os == "macos") return 2;
-    if (os == "windows") return 3;
+    system := os.OS();
+    if (system == "linux") return 1;
+    if (system == "macos") return 2;
+    if (system == "windows") return 3;
     return 0;
 }
 

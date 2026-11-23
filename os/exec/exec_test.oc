@@ -1,7 +1,8 @@
 package exec;
+import "os";
 import "testing";
 import "time";
-func windows() bool { result := 0; asm x86_64/windows { mov qword ptr ${result}, 1 } asm aarch64/windows { mov x0, #1; str x0, ${result} } return result != 0; }
+func windows() bool { return os.OS() == "windows"; }
 func TestOutput(t *testing.T) {
     if (windows()) { t.Skip("POSIX utility fixture; native Windows coverage below"); return; }
     c := Command("printf", "%s|%s", "a b", "$(echo injected)");

@@ -2,10 +2,10 @@ package native_test;
 
 import "internal/native";
 import "testing";
-import "runtime";
+import "os";
 
 func TestPosixBridges(t *testing.T) {
-    if (runtime.Windows()) t.Skip("POSIX bridges");
+    if (os.OS() == "windows") t.Skip("POSIX bridges");
     name := native.CString("HOME");
     if (native.FromC(native.Getenv(native.Address(&name))) == "") t.Error("Getenv HOME");
     missing := native.CString("/definitely/not/here");

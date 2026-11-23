@@ -1,7 +1,6 @@
 package path;
 
 import "os";
-import "runtime";
 
 // Lexical manipulation of file-system paths for the target platform. Results
 // use '/' as the separator on every platform. On Windows '\\' is accepted as
@@ -168,11 +167,11 @@ func rel(basePath string, target string, windows bool) Result<string> {
 }
 
 // ToSlash replaces Windows '\\' separators with '/' (a no-op elsewhere).
-func ToSlash(path string) string { return toSlash(path, runtime.Windows()); }
+func ToSlash(path string) string { return toSlash(path, onWindows()); }
 
 // FromSlash replaces '/' with the native separator: '\\' on Windows.
 func FromSlash(path string) string {
-    if (!runtime.Windows()) return path;
+    if (!onWindows()) return path;
     bytes := path -> []i8;
     for (i := 0; i < len(bytes); i++) { if (bytes[i] == '/') bytes[i] = '\\'; }
     return bytes -> string;
@@ -180,33 +179,33 @@ func FromSlash(path string) string {
 
 // IsAbs reports whether path is absolute. On Windows that requires a drive
 // and a separator ("C:/x") or a UNC root ("//server/share").
-func IsAbs(path string) bool { return isAbs(path, runtime.Windows()); }
+func IsAbs(path string) bool { return isAbs(path, onWindows()); }
 
 // Clean returns the shortest equivalent path: it collapses repeated
 // separators, removes "." elements, and resolves ".." against preceding
 // elements. ".." at the root of an absolute path is dropped. An empty
 // result is ".".
-func Clean(path string) string { return clean(path, runtime.Windows()); }
+func Clean(path string) string { return clean(path, onWindows()); }
 
 // Join joins the non-empty elements with '/' and cleans the result. It
 // returns "" when every element is empty.
-func Join(parts ...string) string { return join(parts, runtime.Windows()); }
+func Join(parts ...string) string { return join(parts, onWindows()); }
 
 // Base returns the last element, ignoring trailing separators. It returns
 // "." for an empty path and "/" for the root.
-func Base(path string) string { return base(path, runtime.Windows()); }
+func Base(path string) string { return base(path, onWindows()); }
 
 // Dir returns all but the last element, cleaned. Dir("a") is ".".
-func Dir(path string) string { return dir(path, runtime.Windows()); }
+func Dir(path string) string { return dir(path, onWindows()); }
 
 // Ext returns the extension of the last element, starting at its final
 // dot ("a/b.tar.gz" gives ".gz"), or "" when it has none.
-func Ext(path string) string { return ext(path, runtime.Windows()); }
+func Ext(path string) string { return ext(path, onWindows()); }
 
 // Split splits path after its final separator into a directory part (with
 // the separator) and a file part; Split("a/b") is ("a/", "b").
 func Split(path string) (string, string) {
-    windows := runtime.Windows();
+    windows := onWindows();
     path = toSlash(path, windows);
     i := len(path) - 1;
     v := volume(path, windows);
@@ -217,7 +216,7 @@ func Split(path string) (string, string) {
 // Rel returns a relative path that reaches target from basePath, such that
 // Join(basePath, result) cleans to target. Both must be absolute or both
 // relative (on the same volume), or an error is returned.
-func Rel(basePath string, target string) Result<string> { return rel(basePath, target, runtime.Windows()); }
+func Rel(basePath string, target string) Result<string> { return rel(basePath, target, onWindows()); }
 
 // Abs returns an absolute, cleaned form of path, joining a relative path to
 // the current working directory. It does not resolve symbolic links; use
@@ -228,3 +227,5 @@ func Abs(path string) Result<string> {
     if (cwd.hasError()) return Result<string>.error(cwd.error());
     return Result<string>.value(Join(cwd.unwrap(), path));
 }
+
+func onWindows() bool { return os.OS() == "windows"; }

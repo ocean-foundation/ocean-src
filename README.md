@@ -58,6 +58,9 @@ contracts.
 `os.OS()` and `os.Arch()` report the program's target. OS names include `linux`,
 `macos`, and `windows`. Architecture names include `x86_64`, `aarch64`, and
 `riscv64`. A JavaScript-hosted WebAssembly build reports `js` and `wasm`.
+`os.ExeSuffix()`, `os.PathSeparator()` and `os.PathListSeparator()` give the
+target's executable suffix and separators. Other standard-library packages use
+`os.OS()` rather than their own detection code.
 
 Windows-specific functions use Unicode paths and return an error on other targets.
 
@@ -332,5 +335,5 @@ whose error names the operation, the path and the system's reason (for example
 These call the C library or Win32 through `internal/native` (UTF-16 wide APIs
 on Windows, so any Unicode path works). On Wasm they return errors.
 
-Other packages: `strings`, `strconv`, `sort`, `unicode`, `unicode/utf8`, `path`,
-`runtime` and `os/signal`, each documented in its directory's README.
+Other packages: `strings`, `strconv`, `sort`, `unicode`, `unicode/utf8`, `path`
+and `os/signal`, each documented in its directory's README.

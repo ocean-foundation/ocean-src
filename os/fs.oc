@@ -1,7 +1,6 @@
 package os;
 
 import "internal/native";
-import "runtime";
 import "sort";
 
 // File-system operations by path. Paths are UTF-8; Windows calls use the
@@ -33,9 +32,9 @@ func (info FileInfo) Perm() int { return info.Mode & ModePerm; }
 
 func lastElement(path string) string {
     end := len(path);
-    for (end > 1 && (path[end - 1] == '/' || (runtime.Windows() && path[end - 1] == '\\'))) end--;
+    for (end > 1 && (path[end - 1] == '/' || (nativeWindows() && path[end - 1] == '\\'))) end--;
     start := end;
-    for (start > 0 && path[start - 1] != '/' && !(runtime.Windows() && (path[start - 1] == '\\' || path[start - 1] == ':'))) start--;
+    for (start > 0 && path[start - 1] != '/' && !(nativeWindows() && (path[start - 1] == '\\' || path[start - 1] == ':'))) start--;
     return path[start:end];
 }
 
@@ -54,7 +53,7 @@ func cArgument(operation string, path string) Result<[]i8> {
 
 func pathArgument(operation string, path string) Result<[]i8> {
     if (path == "") return Result<[]i8>.error("os: " + operation + ": empty path");
-    if (runtime.Windows()) return wideArgument(operation, path);
+    if (nativeWindows()) return wideArgument(operation, path);
     return cArgument(operation, path);
 }
 
@@ -66,7 +65,7 @@ func statPath(operation string, path string, follow bool) Result<FileInfo> {
     base := native.Address(&st);
     info: FileInfo;
     info.Name = lastElement(path);
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         if (native.WinStat(native.Address(&data), base) != 0) return Result<FileInfo>.error(nativeError(operation, path));
         info.Mode = native.ReadU16(base + 6);
         info.Size = native.ReadI64(base + 24);
@@ -79,12 +78,12 @@ func statPath(operation string, path string, follow bool) Result<FileInfo> {
     }
     result := follow ? native.Stat(native.Address(&data), base) : native.Lstat(native.Address(&data), base);
     if (result != 0) return Result<FileInfo>.error(nativeError(operation, path));
-    if (runtime.MacOS()) {
+    if (nativeMacOS()) {
         info.Mode = native.ReadU16(base + 4);
         info.Size = native.ReadI64(base + 96);
         info.ModTime = native.ReadI64(base + 48) * 1000000000 + native.ReadI64(base + 56);
     } else {
-        info.Mode = native.ReadU32(base + (runtime.Arch() == "x86_64" ? 24 : 16));
+        info.Mode = native.ReadU32(base + (Arch() == "x86_64" ? 24 : 16));
         info.Size = native.ReadI64(base + 48);
         info.ModTime = native.ReadI64(base + 88) * 1000000000 + native.ReadI64(base + 96);
     }
@@ -110,7 +109,7 @@ func IsDir(path string) bool {
 // by unsigned byte order.
 func ListDir(path string) Result<[]string> {
     names := make([]string);
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         pattern := path;
         if (!(len(pattern) > 0 && (pattern[len(pattern) - 1] == '/' || pattern[len(pattern) - 1] == '\\'))) pattern = pattern + "\\";
         argument := pathArgument("open", pattern + "*");
@@ -133,7 +132,7 @@ func ListDir(path string) Result<[]string> {
     data := argument.unwrap();
     directory := native.Opendir(native.Address(&data));
     if (directory == 0 || directory == -1) return Result<[]string>.error(nativeError("open", path));
-    offset := runtime.MacOS() ? 21 : 19;
+    offset := nativeMacOS() ? 21 : 19;
     for (;;) {
         entry := native.Readdir(directory);
         if (entry == 0 || entry == -1) break;
@@ -151,16 +150,16 @@ func Mkdir(path string) Result<bool> {
     argument := pathArgument("mkdir", path);
     if (argument.hasError()) return Result<bool>.error(argument.error());
     data := argument.unwrap();
-    ok := runtime.Windows() ? native.WinCreateDirectory(native.Address(&data), 0) != 0 : native.Mkdir(native.Address(&data), 511) == 0;
+    ok := nativeWindows() ? native.WinCreateDirectory(native.Address(&data), 0) != 0 : native.Mkdir(native.Address(&data), 511) == 0;
     if (!ok) return Result<bool>.error(nativeError("mkdir", path));
     return Result<bool>.value(true);
 }
 
 func parentOf(path string) string {
     end := len(path);
-    for (end > 0 && (path[end - 1] == '/' || (runtime.Windows() && path[end - 1] == '\\'))) end--;
-    for (end > 0 && path[end - 1] != '/' && !(runtime.Windows() && path[end - 1] == '\\')) end--;
-    for (end > 1 && (path[end - 1] == '/' || (runtime.Windows() && path[end - 1] == '\\'))) end--;
+    for (end > 0 && (path[end - 1] == '/' || (nativeWindows() && path[end - 1] == '\\'))) end--;
+    for (end > 0 && path[end - 1] != '/' && !(nativeWindows() && path[end - 1] == '\\')) end--;
+    for (end > 1 && (path[end - 1] == '/' || (nativeWindows() && path[end - 1] == '\\'))) end--;
     return path[:end];
 }
 
@@ -173,7 +172,7 @@ func MkdirAll(path string) Result<bool> {
         return Result<bool>.error("os: mkdir " + path + ": Not a directory");
     }
     parent := parentOf(path);
-    if (parent != "" && parent != path && !(runtime.Windows() && len(parent) == 2 && parent[1] == ':')) {
+    if (parent != "" && parent != path && !(nativeWindows() && len(parent) == 2 && parent[1] == ':')) {
         created := MkdirAll(parent);
         if (created.hasError()) return created;
     }
@@ -187,7 +186,7 @@ func Remove(path string) Result<bool> {
     argument := pathArgument("remove", path);
     if (argument.hasError()) return Result<bool>.error(argument.error());
     data := argument.unwrap();
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         if (native.WinDeleteFile(native.Address(&data)) != 0) return Result<bool>.value(true);
         failure := nativeError("remove", path);
         // Directories, including directory symbolic links, need RemoveDirectoryW.
@@ -239,7 +238,7 @@ func Rename(from string, to string) Result<bool> {
     a := source.unwrap();
     b := target.unwrap();
     // MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED
-    ok := runtime.Windows() ? native.WinMoveFileEx(native.Address(&a), native.Address(&b), 3) != 0 : native.Rename(native.Address(&a), native.Address(&b)) == 0;
+    ok := nativeWindows() ? native.WinMoveFileEx(native.Address(&a), native.Address(&b), 3) != 0 : native.Rename(native.Address(&a), native.Address(&b)) == 0;
     if (!ok) return Result<bool>.error(nativeError("rename", from + " to " + to));
     return Result<bool>.value(true);
 }
@@ -251,14 +250,14 @@ func Chmod(path string, mode int) Result<bool> {
     if (argument.hasError()) return Result<bool>.error(argument.error());
     data := argument.unwrap();
     // _S_IREAD | _S_IWRITE on Windows.
-    ok := runtime.Windows() ? native.WinChmod(native.Address(&data), (mode & 128) != 0 ? 384 : 256) == 0 : native.Chmod(native.Address(&data), mode & 4095) == 0;
+    ok := nativeWindows() ? native.WinChmod(native.Address(&data), (mode & 128) != 0 ? 384 : 256) == 0 : native.Chmod(native.Address(&data), mode & 4095) == 0;
     if (!ok) return Result<bool>.error(nativeError("chmod", path));
     return Result<bool>.value(true);
 }
 
 // Getwd returns the current working directory.
 func Getwd() Result<string> {
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         buffer := native.Zeroed(65536);
         n := native.WinGetCurrentDirectory(32768, native.Address(&buffer));
         if (n == 0 || n >= 32768) return Result<string>.error(nativeError("getwd", ""));
@@ -275,7 +274,7 @@ func Chdir(path string) Result<bool> {
     argument := pathArgument("chdir", path);
     if (argument.hasError()) return Result<bool>.error(argument.error());
     data := argument.unwrap();
-    ok := runtime.Windows() ? native.WinSetCurrentDirectory(native.Address(&data)) != 0 : native.Chdir(native.Address(&data)) == 0;
+    ok := nativeWindows() ? native.WinSetCurrentDirectory(native.Address(&data)) != 0 : native.Chdir(native.Address(&data)) == 0;
     if (!ok) return Result<bool>.error(nativeError("chdir", path));
     return Result<bool>.value(true);
 }
@@ -287,7 +286,7 @@ func Realpath(path string) Result<string> {
     argument := pathArgument("realpath", path);
     if (argument.hasError()) return Result<string>.error(argument.error());
     data := argument.unwrap();
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         if (!Exists(path)) return Result<string>.error("os: realpath " + path + ": No such file or directory");
         buffer := native.Zeroed(65536);
         pointer := native.WinFullPath(native.Address(&buffer), native.Address(&data), 32768);
@@ -302,19 +301,19 @@ func Realpath(path string) Result<string> {
 
 // Executable returns the absolute path of the running program.
 func Executable() Result<string> {
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         buffer := native.Zeroed(65536);
         n := native.WinGetModuleFileName(0, native.Address(&buffer), 32768);
         if (n <= 0 || n >= 32768) return Result<string>.error(nativeError("executable", ""));
         return Result<string>.value(native.FromWide(native.Address(&buffer), n));
     }
-    if (runtime.MacOS()) {
+    if (nativeMacOS()) {
         buffer := native.Zeroed(4096);
         size: u32 = 4096;
         if (native.MacExecutablePath(native.Address(&buffer), (&size) -> int) != 0) return Result<string>.error("os: executable: path too long");
         return Realpath(native.FromC(native.Address(&buffer)));
     }
-    if (runtime.Linux()) {
+    if (nativeLinux()) {
         link := native.CString("/proc/self/exe");
         buffer := native.Zeroed(4096);
         n := native.Readlink(native.Address(&link), native.Address(&buffer), 4095);
@@ -327,7 +326,7 @@ func Executable() Result<string> {
 // TempDir returns the directory for temporary files: TMPDIR (or TEMP/TMP on
 // Windows) when set, otherwise /tmp or the Windows temporary directory.
 func TempDir() string {
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         buffer := native.Zeroed(65536);
         n := native.WinGetTempPath(32768, native.Address(&buffer));
         if (n > 0 && n < 32768) {
@@ -366,7 +365,7 @@ func windowsTempName(prefix string) string {
 // its path. The caller removes it, for example with RemoveAll.
 func MkdirTemp(prefix string) Result<string> {
     if (!validPrefix(prefix)) return Result<string>.error("os: mkdirtemp: prefix contains a path separator");
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         for (attempt := 0; attempt < 100; attempt++) {
             path := windowsTempName(prefix);
             if (!Mkdir(path).hasError()) return Result<string>.value(path);
@@ -384,7 +383,7 @@ func MkdirTemp(prefix string) Result<string> {
 // and returns its path. Open it with Open; the caller removes it.
 func CreateTemp(prefix string) Result<string> {
     if (!validPrefix(prefix)) return Result<string>.error("os: createtemp: prefix contains a path separator");
-    if (runtime.Windows()) {
+    if (nativeWindows()) {
         for (attempt := 0; attempt < 100; attempt++) {
             path := windowsTempName(prefix);
             data := native.Wide(path).unwrap();

@@ -1,13 +1,13 @@
 package signal_test;
 
 import "os/signal";
-import "runtime";
+import "os";
 import "testing";
 
 // Delivering a real signal needs a single-threaded process; see
 // tests/test_signal.py. These checks need no signal.
 func TestWithoutSignals(t *testing.T) {
-    if (!runtime.Linux() && !runtime.MacOS()) {
+    if (os.OS() != "linux" && os.OS() != "macos") {
         if (!signal.Block().hasError()) t.Error("Block should be unsupported");
         if (signal.Pending() != 0 || signal.Wait(1000) != 0) t.Error("Pending/Wait should report nothing");
         return;

@@ -1,7 +1,6 @@
 package path;
 
 import "os";
-import "runtime";
 import "testing";
 
 struct pair { input, want string; }
@@ -56,6 +55,6 @@ func TestRel(t *testing.T) {
 func TestAbs(t *testing.T) {
     cwd := os.Getwd().unwrap();
     if (Abs("x/../y").unwrap() != Join(cwd, "y")) t.Error("Abs relative");
-    if (!runtime.Windows() && Abs("/a/./b").unwrap() != "/a/b") t.Error("Abs absolute");
+    if (!onWindows() && Abs("/a/./b").unwrap() != "/a/b") t.Error("Abs absolute");
     if (!IsAbs(Abs("z").unwrap())) t.Error("Abs result");
 }

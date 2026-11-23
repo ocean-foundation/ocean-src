@@ -2,7 +2,6 @@ package os_test;
 
 import "os";
 import "os/exec";
-import "runtime";
 import "testing";
 
 func scratch(t *testing.T) string {
@@ -64,7 +63,7 @@ func TestFilesAndDirectories(t *testing.T) {
 }
 
 func TestPermissionsAndLinks(t *testing.T) {
-    if (runtime.Windows()) t.Skip("POSIX permissions and links");
+    if (os.OS() == "windows") t.Skip("POSIX permissions and links");
     dir := scratch(t);
     file := dir + "/script";
     os.WriteFile(file, "#!/bin/sh\n").unwrap();
@@ -113,4 +112,10 @@ func TestProgramAndTemporaryFiles(t *testing.T) {
 
 func TestInvalidPaths(t *testing.T) {
     if (!os.Stat("").hasError() || !os.Mkdir("a\x00b").hasError() || !os.Remove("").hasError()) t.Error("empty and NUL paths");
+}
+
+func TestPlatformHelpers(t *testing.T) {
+    windows := os.OS() == "windows";
+    if ((os.ExeSuffix() == ".exe") != windows) t.Error("ExeSuffix");
+    if ((os.PathSeparator() == '\\') != windows || (os.PathListSeparator() == ';') != windows) t.Error("separators");
 }
