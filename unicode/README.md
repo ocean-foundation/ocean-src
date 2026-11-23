@@ -17,6 +17,7 @@ Unicode version and the compiler checkout as a sibling (or pass its
 `DecodeLast(text)` return a code point and its byte width (invalid input gives
 `RuneError` with width 1, end of input width 0), `Encode`, `Len`, `Valid`,
 `Count`, `Runes`, and `FromRunes`. Overlong forms, surrogates and values above
-U+10FFFF are invalid.
+U+10FFFF are invalid. Ocean copies string arguments, so `Decode` in a loop over
+long text copies it once per call; `Runes`, `Count` and `Valid` decode in one pass.
 
 Run `ocean test unicode unicode/utf8`.
