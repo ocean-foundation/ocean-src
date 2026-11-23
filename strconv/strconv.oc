@@ -1,0 +1,185 @@
+package strconv;
+
+// Integer formatting and parsing in any base from 2 to 36, and quoting.
+// Digits above 9 are lower-case letters; parsing accepts either case.
+
+func digit(value int) i8 { return "0123456789abcdefghijklmnopqrstuvwxyz"[value]; }
+
+func checkBase(base int) {
+    if (base < 2 || base > 36) panic "strconv: base must be from 2 to 36";
+}
+
+// Itoa formats n in base 10.
+func Itoa(n int) string { return FormatInt(n, 10); }
+
+// FormatInt formats n in the given base, with a leading '-' when negative.
+// It handles the most negative int. An invalid base panics.
+func FormatInt(n int, base int) string {
+    checkBase(base);
+    if (n == 0) return "0";
+    digits: [65]i8;
+    i := 65;
+    if (n < 0) {
+        // Work with negative remainders so the most negative int needs no negation.
+        for (n != 0) { i--; digits[i] = digit(-(n % base)); n = n / base; }
+        i--; digits[i] = '-';
+    } else {
+        for (n != 0) { i--; digits[i] = digit(n % base); n = n / base; }
+    }
+    return digits[i:] -> string;
+}
+
+// FormatUint formats n in the given base. An invalid base panics.
+func FormatUint(n uint, base int) string {
+    checkBase(base);
+    if (n == 0) return "0";
+    digits: [64]i8;
+    i := 64;
+    b := base -> uint;
+    for (n != 0) { i--; digits[i] = digit((n % b) -> int); n = n / b; }
+    return digits[i:] -> string;
+}
+
+func digitValue(c i8) int {
+    if (c >= '0' && c <= '9') return (c - '0') -> int;
+    if (c >= 'a' && c <= 'z') return (c - 'a') -> int + 10;
+    if (c >= 'A' && c <= 'Z') return (c - 'A') -> int + 10;
+    return 99;
+}
+
+// Atoi parses a base-10 int. It is ParseInt(text, 10).
+func Atoi(text string) Result<int> { return ParseInt(text, 10); }
+
+// ParseInt parses the whole of text as a signed integer in the given base,
+// with an optional leading '+' or '-'. It does not accept prefixes such as
+// "0x", digit separators, or surrounding spaces. Out-of-range values are errors.
+func ParseInt(text string, base int) Result<int> {
+    if (base < 2 || base > 36) return Result<int>.error("strconv: base must be from 2 to 36");
+    i := 0;
+    negative := false;
+    if (len(text) > 0 && (text[0] == '+' || text[0] == '-')) { negative = text[0] == '-'; i = 1; }
+    if (i >= len(text)) return Result<int>.error("strconv: invalid syntax: \"" + text + "\"");
+    // Accumulate negatively: the negative range is one larger than the positive.
+    limit := -9223372036854775807 - 1;
+    value := 0;
+    for (; i < len(text); i++) {
+        d := digitValue(text[i]);
+        if (d >= base) return Result<int>.error("strconv: invalid syntax: \"" + text + "\"");
+        if (value < (limit + d) / base) return Result<int>.error("strconv: value out of range: \"" + text + "\"");
+        value = value * base - d;
+    }
+    if (!negative) {
+        if (value == limit) return Result<int>.error("strconv: value out of range: \"" + text + "\"");
+        value = -value;
+    }
+    return Result<int>.value(value);
+}
+
+// ParseUint parses the whole of text as an unsigned integer in the given base.
+// No sign is accepted.
+func ParseUint(text string, base int) Result<uint> {
+    if (base < 2 || base > 36) return Result<uint>.error("strconv: base must be from 2 to 36");
+    if (len(text) == 0) return Result<uint>.error("strconv: invalid syntax: \"\"");
+    b := base -> uint;
+    max := 18446744073709551615 -> uint;
+    value := 0 -> uint;
+    for (i := 0; i < len(text); i++) {
+        d := digitValue(text[i]);
+        if (d >= base) return Result<uint>.error("strconv: invalid syntax: \"" + text + "\"");
+        du := d -> uint;
+        if (value > (max - du) / b) return Result<uint>.error("strconv: value out of range: \"" + text + "\"");
+        value = value * b + du;
+    }
+    return Result<uint>.value(value);
+}
+
+// ParseBool accepts "true" and "false".
+func ParseBool(text string) Result<bool> {
+    if (text == "true") return Result<bool>.value(true);
+    if (text == "false") return Result<bool>.value(false);
+    return Result<bool>.error("strconv: invalid boolean: \"" + text + "\"");
+}
+
+// FormatBool returns "true" or "false".
+func FormatBool(value bool) string { return value ? "true" : "false"; }
+
+// Quote returns text as a double-quoted Ocean string literal. Quotes,
+// backslashes and control bytes are escaped; other bytes, including UTF-8,
+// are kept as they are.
+func Quote(text string) string {
+    out := []i8{'"'};
+    for (i := 0; i < len(text); i++) {
+        c := text[i];
+        if (c == '"') out.append('\\', '"');
+        else if (c == '\\') out.append('\\', '\\');
+        else if (c == '\n') out.append('\\', 'n');
+        else if (c == '\t') out.append('\\', 't');
+        else if (c == '\r') out.append('\\', 'r');
+        else if ((c >= 0 && c < 32) || c == 127) {
+            out.append('\\', 'x', digit((c -> int) >> 4), digit((c -> int) & 15));
+        } else out.append(c);
+    }
+    out.append('"');
+    return out -> string;
+}
+
+func appendRune(out *[]i8, r int) {
+    if (r < 128) { (*out).append(r -> i8); return; }
+    if (r < 2048) { (*out).append((192 | (r >> 6)) -> i8, (128 | (r & 63)) -> i8); return; }
+    if (r < 65536) { (*out).append((224 | (r >> 12)) -> i8, (128 | ((r >> 6) & 63)) -> i8, (128 | (r & 63)) -> i8); return; }
+    (*out).append((240 | (r >> 18)) -> i8, (128 | ((r >> 12) & 63)) -> i8, (128 | ((r >> 6) & 63)) -> i8, (128 | (r & 63)) -> i8);
+}
+
+// Unquote interprets a double-quoted Ocean string literal, accepting the
+// language's escapes: \a \b \e \f \n \r \t \v \\ \' \" \?, one to three octal
+// digits, \xHH, \uHHHH and \UHHHHHHHH.
+func Unquote(text string) Result<string> {
+    if (len(text) < 2 || text[0] != '"' || text[len(text) - 1] != '"')
+        return Result<string>.error("strconv: invalid quoted string");
+    body := text[1:len(text) - 1];
+    out := make([]i8);
+    for (i := 0; i < len(body); i++) {
+        c := body[i];
+        if (c == '"' || c == '\n') return Result<string>.error("strconv: invalid quoted string");
+        if (c != '\\') { out.append(c); continue; }
+        i++;
+        if (i >= len(body)) return Result<string>.error("strconv: unterminated escape");
+        e := body[i];
+        if (e == 'a') out.append(7);
+        else if (e == 'b') out.append(8);
+        else if (e == 'e') out.append(27);
+        else if (e == 'f') out.append(12);
+        else if (e == 'n') out.append('\n');
+        else if (e == 'r') out.append('\r');
+        else if (e == 't') out.append('\t');
+        else if (e == 'v') out.append(11);
+        else if (e == '\\' || e == '\'' || e == '"' || e == '?') out.append(e);
+        else if (e >= '0' && e <= '7') {
+            value := 0;
+            count := 0;
+            for (count < 3 && i < len(body) && body[i] >= '0' && body[i] <= '7') {
+                value = value * 8 + (body[i] - '0') -> int;
+                i++; count++;
+            }
+            i--;
+            if (value > 255) return Result<string>.error("strconv: invalid octal escape");
+            out.append(value -> i8);
+        } else if (e == 'x' || e == 'u' || e == 'U') {
+            count := e == 'x' ? 2 : (e == 'u' ? 4 : 8);
+            if (i + count > len(body) - 1) return Result<string>.error("strconv: short escape");
+            value := 0;
+            for (j := 1; j <= count; j++) {
+                d := digitValue(body[i + j]);
+                if (d >= 16) return Result<string>.error("strconv: invalid hexadecimal escape");
+                value = value * 16 + d;
+            }
+            i += count;
+            if (e == 'x') out.append(value -> i8);
+            else {
+                if (value > 1114111 || (value >= 55296 && value <= 57343)) return Result<string>.error("strconv: invalid Unicode escape");
+                appendRune(&out, value);
+            }
+        } else return Result<string>.error("strconv: unknown escape");
+    }
+    return Result<string>.value(out -> string);
+}

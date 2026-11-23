@@ -1,0 +1,230 @@
+package path;
+
+import "os";
+import "runtime";
+
+// Lexical manipulation of file-system paths for the target platform. Results
+// use '/' as the separator on every platform. On Windows '\\' is accepted as
+// a separator too, and drive ("C:/") and UNC ("//server/share") roots are
+// recognized. Nothing here touches the file system.
+
+func isSep(c i8, windows bool) bool { return c == '/' || (windows && c == '\\'); }
+
+func toSlash(path string, windows bool) string {
+    if (!windows) return path;
+    bytes := path -> []i8;
+    for (i := 0; i < len(bytes); i++) { if (bytes[i] == '\\') bytes[i] = '/'; }
+    return bytes -> string;
+}
+
+func isLetter(c i8) bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+
+// volume returns the length of a leading Windows volume: "C:" or "//server/share".
+func volume(path string, windows bool) int {
+    if (!windows) return 0;
+    if (len(path) >= 2 && path[1] == ':' && isLetter(path[0])) return 2;
+    if (len(path) >= 3 && path[0] == '/' && path[1] == '/' && path[2] != '/') {
+        server := 2;
+        for (server < len(path) && path[server] != '/') server++;
+        if (server >= len(path) || server == 2) return 0;
+        share := server + 1;
+        for (share < len(path) && path[share] != '/') share++;
+        if (share == server + 1) return 0;
+        return share;
+    }
+    return 0;
+}
+
+// rootLength is the length of the volume plus any separator that makes the path absolute.
+func rootLength(path string, windows bool) int {
+    v := volume(path, windows);
+    if (v < len(path) && path[v] == '/') return v + 1;
+    return v;
+}
+
+func isAbs(path string, windows bool) bool {
+    path = toSlash(path, windows);
+    v := volume(path, windows);
+    if (v > 2) return true;
+    if (windows) return v == 2 && len(path) > 2 && path[2] == '/';
+    return len(path) > 0 && path[0] == '/';
+}
+
+func clean(path string, windows bool) string {
+    path = toSlash(path, windows);
+    v := volume(path, windows);
+    prefix := path[:v];
+    rest := path[v:];
+    rooted := len(rest) > 0 && rest[0] == '/';
+    if (v > 2) rooted = true;
+    parts := make([]string);
+    start := 0;
+    for (i := 0; i <= len(rest); i++) {
+        if (i < len(rest) && rest[i] != '/') continue;
+        part := rest[start:i];
+        start = i + 1;
+        if (part == "" || part == ".") continue;
+        if (part == "..") {
+            if (len(parts) > 0 && parts[len(parts) - 1] != "..") { parts.pop(); continue; }
+            if (rooted) continue;
+        }
+        parts.append(part);
+    }
+    out := make([]i8);
+    out.append(prefix...);
+    if (rooted) out.append('/');
+    for (i := 0; i < len(parts); i++) {
+        if (i > 0) out.append('/');
+        out.append(parts[i]...);
+    }
+    if (len(out) == 0) return ".";
+    return out -> string;
+}
+
+func join(parts []string, windows bool) string {
+    out := "";
+    for (_, part := range parts) {
+        if (part == "") continue;
+        if (out == "") { out = part; continue; }
+        out = out + "/" + part;
+    }
+    if (out == "") return "";
+    return clean(out, windows);
+}
+
+func base(path string, windows bool) string {
+    path = toSlash(path, windows);
+    path = path[volume(path, windows):];
+    for (len(path) > 1 && path[len(path) - 1] == '/') path = path[:len(path) - 1];
+    if (path == "") return ".";
+    if (path == "/") return "/";
+    i := len(path) - 1;
+    for (i >= 0 && path[i] != '/') i--;
+    return path[i + 1:];
+}
+
+func dir(path string, windows bool) string {
+    path = toSlash(path, windows);
+    v := volume(path, windows);
+    i := len(path) - 1;
+    for (i >= v && path[i] != '/') i--;
+    result := clean(path[:i + 1], windows);
+    if (v > 2 && len(result) < v) return path[:v];
+    return result;
+}
+
+func ext(path string, windows bool) string {
+    path = toSlash(path, windows);
+    for (i := len(path) - 1; i >= 0 && path[i] != '/'; i--) {
+        if (path[i] == '.') return path[i:];
+    }
+    return "";
+}
+
+func splitParts(path string, root int) []string {
+    parts := make([]string);
+    if (path[root:] == "" || path[root:] == ".") return parts;
+    start := root;
+    for (i := root; i <= len(path); i++) {
+        if (i == len(path) || path[i] == '/') { parts.append(path[start:i]); start = i + 1; }
+    }
+    return parts;
+}
+
+func sameVolume(a string, b string, windows bool) bool {
+    if (len(a) != len(b)) return false;
+    for (i := 0; i < len(a); i++) {
+        x := a[i]; y := b[i];
+        if (windows) {
+            if (x >= 'A' && x <= 'Z') x = x + 32;
+            if (y >= 'A' && y <= 'Z') y = y + 32;
+        }
+        if (x != y) return false;
+    }
+    return true;
+}
+
+func rel(basePath string, target string, windows bool) Result<string> {
+    b := clean(basePath, windows);
+    t := clean(target, windows);
+    if (isAbs(b, windows) != isAbs(t, windows)) return Result<string>.error("path: cannot make " + target + " relative to " + basePath);
+    bv := volume(b, windows);
+    tv := volume(t, windows);
+    if (!sameVolume(b[:bv], t[:tv], windows)) return Result<string>.error("path: " + target + " and " + basePath + " are on different volumes");
+    bp := splitParts(b, rootLength(b, windows));
+    tp := splitParts(t, rootLength(t, windows));
+    common := 0;
+    for (common < len(bp) && common < len(tp) && (windows ? sameVolume(bp[common], tp[common], true) : bp[common] == tp[common])) common++;
+    for (i := common; i < len(bp); i++) {
+        if (bp[i] == "..") return Result<string>.error("path: cannot make " + target + " relative to " + basePath);
+    }
+    parts := make([]string);
+    for (i := common; i < len(bp); i++) parts.append("..");
+    for (i := common; i < len(tp); i++) parts.append(tp[i]);
+    if (len(parts) == 0) return Result<string>.value(".");
+    out := parts[0];
+    for (i := 1; i < len(parts); i++) out = out + "/" + parts[i];
+    return Result<string>.value(out);
+}
+
+// ToSlash replaces Windows '\\' separators with '/' (a no-op elsewhere).
+func ToSlash(path string) string { return toSlash(path, runtime.Windows()); }
+
+// FromSlash replaces '/' with the native separator: '\\' on Windows.
+func FromSlash(path string) string {
+    if (!runtime.Windows()) return path;
+    bytes := path -> []i8;
+    for (i := 0; i < len(bytes); i++) { if (bytes[i] == '/') bytes[i] = '\\'; }
+    return bytes -> string;
+}
+
+// IsAbs reports whether path is absolute. On Windows that requires a drive
+// and a separator ("C:/x") or a UNC root ("//server/share").
+func IsAbs(path string) bool { return isAbs(path, runtime.Windows()); }
+
+// Clean returns the shortest equivalent path: it collapses repeated
+// separators, removes "." elements, and resolves ".." against preceding
+// elements. ".." at the root of an absolute path is dropped. An empty
+// result is ".".
+func Clean(path string) string { return clean(path, runtime.Windows()); }
+
+// Join joins the non-empty elements with '/' and cleans the result. It
+// returns "" when every element is empty.
+func Join(parts ...string) string { return join(parts, runtime.Windows()); }
+
+// Base returns the last element, ignoring trailing separators. It returns
+// "." for an empty path and "/" for the root.
+func Base(path string) string { return base(path, runtime.Windows()); }
+
+// Dir returns all but the last element, cleaned. Dir("a") is ".".
+func Dir(path string) string { return dir(path, runtime.Windows()); }
+
+// Ext returns the extension of the last element, starting at its final
+// dot ("a/b.tar.gz" gives ".gz"), or "" when it has none.
+func Ext(path string) string { return ext(path, runtime.Windows()); }
+
+// Split splits path after its final separator into a directory part (with
+// the separator) and a file part; Split("a/b") is ("a/", "b").
+func Split(path string) (string, string) {
+    windows := runtime.Windows();
+    path = toSlash(path, windows);
+    i := len(path) - 1;
+    v := volume(path, windows);
+    for (i >= v && path[i] != '/') i--;
+    return path[:i + 1], path[i + 1:];
+}
+
+// Rel returns a relative path that reaches target from basePath, such that
+// Join(basePath, result) cleans to target. Both must be absolute or both
+// relative (on the same volume), or an error is returned.
+func Rel(basePath string, target string) Result<string> { return rel(basePath, target, runtime.Windows()); }
+
+// Abs returns an absolute, cleaned form of path, joining a relative path to
+// the current working directory. It does not resolve symbolic links; use
+// os.Realpath for that.
+func Abs(path string) Result<string> {
+    if (IsAbs(path)) return Result<string>.value(Clean(path));
+    cwd := os.Getwd();
+    if (cwd.hasError()) return Result<string>.error(cwd.error());
+    return Result<string>.value(Join(cwd.unwrap(), path));
+}

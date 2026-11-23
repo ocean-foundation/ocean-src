@@ -1,0 +1,127 @@
+package native;
+
+// Helpers shared by the standard library's native code: C strings, UTF-16
+// strings for Win32, errno, and reads from native structures. This package is
+// internal to the standard library; its API may change without notice.
+
+// CString returns text as a NUL-terminated byte array. Pass its .data address
+// to a bridge and keep the array alive for the duration of the call.
+func CString(text string) []i8 { bytes := text -> []i8; bytes.append(0); return bytes; }
+
+// HasNUL reports whether text contains a NUL byte, which C APIs cannot accept.
+func HasNUL(text string) bool {
+    for (i := 0; i < len(text); i++) { if (text[i] == 0) return true; }
+    return false;
+}
+
+// Address returns the address of a byte array's elements.
+func Address(bytes *[]i8) int { return (*bytes).data -> int; }
+
+// FromC copies the NUL-terminated string at address (empty for address 0).
+func FromC(address int) string {
+    if (address == 0) return "";
+    p := address -> (buffer<i8>);
+    out := make([]i8);
+    for (i := 0; p[i] != 0; i++) out.append(p[i]);
+    return out -> string;
+}
+
+// ReadI32, ReadU16, ReadU32 and ReadI64 read a native field at address.
+func ReadI32(address int) int { return (*(address -> (*i32))) -> int; }
+func ReadU16(address int) int { return (*(address -> (*u16))) -> int; }
+func ReadU32(address int) int { return (*(address -> (*u32))) -> int; }
+func ReadI64(address int) int { return *(address -> (*int)); }
+
+// Errno returns the calling thread's C errno value (0 if unavailable).
+func Errno() int {
+    location := ErrnoLocation();
+    if (location == 0 || location == -1) return 0;
+    return ReadI32(location);
+}
+
+// ErrorText describes a C errno value, for example "No such file or directory".
+func ErrorText(code int) string {
+    text := Strerror(code);
+    if (text == 0 || text == -1) return "error " + decimal(code);
+    return FromC(text);
+}
+
+// LastError describes errno after a failed C call.
+func LastError() string { return ErrorText(Errno()); }
+
+func decimal(n int) string {
+    if (n == 0) return "0";
+    negative := n < 0;
+    digits := make([]i8);
+    for (n != 0) {
+        d := n % 10;
+        if (d < 0) d = -d;
+        digits.prepend(('0' + d) -> i8);
+        n = n / 10;
+    }
+    if (negative) digits.prepend('-');
+    return digits -> string;
+}
+
+// Wide converts UTF-8 text to NUL-terminated little-endian UTF-16 for Win32.
+func Wide(text string) Result<[]i8> {
+    result := []i8{};
+    for (i := 0; i < len(text);) {
+        first := (text[i] -> u8) -> int;
+        code := first;
+        width := 1;
+        if (first >= 192 && first < 224) { width = 2; code = first & 31; }
+        else if (first >= 224 && first < 240) { width = 3; code = first & 15; }
+        else if (first >= 240 && first < 248) { width = 4; code = first & 7; }
+        else if (first >= 128) return Result<[]i8>.error("invalid UTF-8");
+        if (width > len(text) - i) return Result<[]i8>.error("invalid UTF-8");
+        for (j := 1; j < width; j++) {
+            b := (text[i + j] -> u8) -> int;
+            if (b < 128 || b > 191) return Result<[]i8>.error("invalid UTF-8");
+            code = (code << 6) | (b & 63);
+        }
+        if ((width == 2 && code < 128) || (width == 3 && code < 2048) ||
+            (width == 4 && code < 65536) || code > 1114111 || (code >= 55296 && code <= 57343))
+            return Result<[]i8>.error("invalid UTF-8");
+        if (code > 65535) {
+            code -= 65536;
+            high := 55296 + (code >> 10);
+            result.append((high & 255) -> i8, (high >> 8) -> i8);
+            code = 56320 + (code & 1023);
+        }
+        result.append((code & 255) -> i8, (code >> 8) -> i8);
+        i += width;
+    }
+    result.append(0, 0);
+    return Result<[]i8>.value(result);
+}
+
+// FromWide converts UTF-16 at address to UTF-8. A negative count reads up to
+// a NUL unit; otherwise exactly count units are read. Unpaired surrogates
+// become U+FFFD.
+func FromWide(address int, count int) string {
+    out := make([]i8);
+    if (address == 0) return "";
+    for (i := 0; count < 0 || i < count; i++) {
+        unit := ReadU16(address + i * 2);
+        if (count < 0 && unit == 0) break;
+        code := unit;
+        if (unit >= 55296 && unit <= 56319 && (count < 0 || i + 1 < count)) {
+            next := ReadU16(address + (i + 1) * 2);
+            if (next >= 56320 && next <= 57343) { code = 65536 + ((unit - 55296) << 10) + (next - 56320); i++; }
+            else code = 65533;
+        } else if (unit >= 55296 && unit <= 57343) code = 65533;
+        if (code < 128) out.append(code -> i8);
+        else if (code < 2048) out.append((192 | (code >> 6)) -> i8, (128 | (code & 63)) -> i8);
+        else if (code < 65536) out.append((224 | (code >> 12)) -> i8, (128 | ((code >> 6) & 63)) -> i8, (128 | (code & 63)) -> i8);
+        else out.append((240 | (code >> 18)) -> i8, (128 | ((code >> 12) & 63)) -> i8, (128 | ((code >> 6) & 63)) -> i8, (128 | (code & 63)) -> i8);
+    }
+    return out -> string;
+}
+
+// Zeroed returns a byte array of n zero bytes, for native output buffers.
+func Zeroed(n int) []i8 {
+    out := make([]i8);
+    for (i := 0; i < n; i++) out.append(0);
+    return out;
+}

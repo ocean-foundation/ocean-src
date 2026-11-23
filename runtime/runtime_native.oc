@@ -1,0 +1,43 @@
+package runtime;
+
+// Each native target sets a code with its own assembly block; blocks for
+// other targets are omitted at compile time, so these cost a constant store.
+
+// OS returns "linux", "macos", or "windows" for native targets ("js" for Wasm).
+func OS() string {
+    kind := 0;
+    asm x86_64/macos {
+        mov qword ptr ${kind}, 1
+    }
+    asm aarch64/macos {
+        mov x0, #1
+        str x0, ${kind}
+    }
+    asm x86_64/windows {
+        mov qword ptr ${kind}, 2
+    }
+    asm aarch64/windows {
+        mov x0, #2
+        str x0, ${kind}
+    }
+    if (kind == 1) return "macos";
+    if (kind == 2) return "windows";
+    return "linux";
+}
+
+// Arch returns "x86_64", "aarch64", or "riscv64" for native targets
+// ("wasm" for WebAssembly).
+func Arch() string {
+    kind := 0;
+    asm aarch64 {
+        mov x0, #1
+        str x0, ${kind}
+    }
+    asm riscv64 {
+        li a0, 2
+        sd a0, ${kind}
+    }
+    if (kind == 1) return "aarch64";
+    if (kind == 2) return "riscv64";
+    return "x86_64";
+}

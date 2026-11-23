@@ -316,3 +316,21 @@ provides locale-independent round-trip float formatting used by JSON.
 The matching compiler needs interface-array/enum ownership fixes, libcurl
 linking (including object-cache hits), and native/Wasm source-file selection. Run `ocean test ./...` to run all
 standard-library tests; HTTP tests need loopback socket access.
+
+## Files, directories and the environment
+
+`os` also provides path-based file-system operations, each returning a `Result`
+whose error names the operation, the path and the system's reason (for example
+`os: mkdir data: File exists`): `Stat`/`Lstat` (`FileInfo` with `Name`, `Size`,
+`Mode`, `ModTime` in Unix nanoseconds, and `IsDir`/`IsRegular`/`IsSymlink`/`Perm`),
+`Exists`, `IsDir`, `ListDir` (sorted names), `Mkdir`, `MkdirAll`, `Remove`,
+`RemoveAll` (does not follow links; a missing path succeeds), `Rename`, `Chmod`,
+`Getwd`, `Chdir`, `Realpath`, `Executable`, `TempDir`, `MkdirTemp`, `CreateTemp`,
+`ReadFile` and `WriteFile`. Environment access is `Getenv`, `LookupEnv`,
+`Setenv` and `Unsetenv`; `Getpid` returns the process ID.
+
+These call the C library or Win32 through `internal/native` (UTF-16 wide APIs
+on Windows, so any Unicode path works). On Wasm they return errors.
+
+Other packages: `strings`, `strconv`, `sort`, `unicode`, `unicode/utf8`, `path`,
+`runtime` and `os/signal`, each documented in its directory's README.

@@ -1,0 +1,426 @@
+package os;
+
+import "internal/native";
+import "runtime";
+import "sort";
+
+// File-system operations by path. Paths are UTF-8; Windows calls use the
+// wide-character APIs, so non-ASCII names work there too. Errors read like
+// "os: mkdir /tmp/x: File exists".
+
+// Mode type bits, as in POSIX st_mode.
+ModeType := 61440;     // S_IFMT
+ModeDir := 16384;      // S_IFDIR
+ModeRegular := 32768;  // S_IFREG
+ModeSymlink := 40960;  // S_IFLNK
+ModePerm := 511;       // permission bits (0777)
+
+// FileInfo describes a file. ModTime is in nanoseconds since the Unix epoch
+// (whole seconds on Windows). Mode holds the type and permission bits.
+struct FileInfo { Name string; Size int; Mode int; ModTime int; }
+
+// IsDir reports whether the file is a directory.
+func (info FileInfo) IsDir() bool { return (info.Mode & ModeType) == ModeDir; }
+
+// IsRegular reports whether the file is a regular file.
+func (info FileInfo) IsRegular() bool { return (info.Mode & ModeType) == ModeRegular; }
+
+// IsSymlink reports whether the file is a symbolic link (only from Lstat).
+func (info FileInfo) IsSymlink() bool { return (info.Mode & ModeType) == ModeSymlink; }
+
+// Perm returns the permission bits, such as 0644 (420).
+func (info FileInfo) Perm() int { return info.Mode & ModePerm; }
+
+func lastElement(path string) string {
+    end := len(path);
+    for (end > 1 && (path[end - 1] == '/' || (runtime.Windows() && path[end - 1] == '\\'))) end--;
+    start := end;
+    for (start > 0 && path[start - 1] != '/' && !(runtime.Windows() && (path[start - 1] == '\\' || path[start - 1] == ':'))) start--;
+    return path[start:end];
+}
+
+// widePath converts a path for Win32, rejecting NUL and invalid UTF-8.
+func wideArgument(operation string, path string) Result<[]i8> {
+    if (native.HasNUL(path)) return Result<[]i8>.error("os: " + operation + " " + path + ": path contains NUL");
+    converted := native.Wide(path);
+    if (converted.hasError()) return Result<[]i8>.error("os: " + operation + " " + path + ": path is not valid UTF-8");
+    return converted;
+}
+
+func cArgument(operation string, path string) Result<[]i8> {
+    if (native.HasNUL(path)) return Result<[]i8>.error("os: " + operation + " " + path + ": path contains NUL");
+    return Result<[]i8>.value(native.CString(path));
+}
+
+func pathArgument(operation string, path string) Result<[]i8> {
+    if (path == "") return Result<[]i8>.error("os: " + operation + ": empty path");
+    if (runtime.Windows()) return wideArgument(operation, path);
+    return cArgument(operation, path);
+}
+
+func statPath(operation string, path string, follow bool) Result<FileInfo> {
+    argument := pathArgument(operation, path);
+    if (argument.hasError()) return Result<FileInfo>.error(argument.error());
+    data := argument.unwrap();
+    st := native.Zeroed(256);
+    base := native.Address(&st);
+    info: FileInfo;
+    info.Name = lastElement(path);
+    if (runtime.Windows()) {
+        if (native.WinStat(native.Address(&data), base) != 0) return Result<FileInfo>.error(nativeError(operation, path));
+        info.Mode = native.ReadU16(base + 6);
+        info.Size = native.ReadI64(base + 24);
+        info.ModTime = native.ReadI64(base + 40) * 1000000000;
+        if (!follow) {
+            attributes := native.WinGetFileAttributes(native.Address(&data));
+            if (attributes != 4294967295 && (attributes & 1024) != 0) info.Mode = (info.Mode & ModePerm) | ModeSymlink;
+        }
+        return Result<FileInfo>.value(info);
+    }
+    result := follow ? native.Stat(native.Address(&data), base) : native.Lstat(native.Address(&data), base);
+    if (result != 0) return Result<FileInfo>.error(nativeError(operation, path));
+    if (runtime.MacOS()) {
+        info.Mode = native.ReadU16(base + 4);
+        info.Size = native.ReadI64(base + 96);
+        info.ModTime = native.ReadI64(base + 48) * 1000000000 + native.ReadI64(base + 56);
+    } else {
+        info.Mode = native.ReadU32(base + (runtime.Arch() == "x86_64" ? 24 : 16));
+        info.Size = native.ReadI64(base + 48);
+        info.ModTime = native.ReadI64(base + 88) * 1000000000 + native.ReadI64(base + 96);
+    }
+    return Result<FileInfo>.value(info);
+}
+
+// Stat describes the file at path, following symbolic links.
+func Stat(path string) Result<FileInfo> { return statPath("stat", path, true); }
+
+// Lstat describes the file at path without following a final symbolic link.
+func Lstat(path string) Result<FileInfo> { return statPath("lstat", path, false); }
+
+// Exists reports whether path names an existing file, following links.
+func Exists(path string) bool { return !Stat(path).hasError(); }
+
+// IsDir reports whether path names an existing directory, following links.
+func IsDir(path string) bool {
+    info := Stat(path);
+    return !info.hasError() && info.unwrap().IsDir();
+}
+
+// ListDir returns the names in a directory, excluding "." and "..", sorted
+// by unsigned byte order.
+func ListDir(path string) Result<[]string> {
+    names := make([]string);
+    if (runtime.Windows()) {
+        pattern := path;
+        if (!(len(pattern) > 0 && (pattern[len(pattern) - 1] == '/' || pattern[len(pattern) - 1] == '\\'))) pattern = pattern + "\\";
+        argument := pathArgument("open", pattern + "*");
+        if (argument.hasError()) return Result<[]string>.error(argument.error());
+        data := argument.unwrap();
+        found := native.Zeroed(600);
+        handle := native.WinFindFirstFile(native.Address(&data), native.Address(&found));
+        if (handle == -1) return Result<[]string>.error(nativeError("open", path));
+        for (;;) {
+            name := native.FromWide(native.Address(&found) + 44, -1);
+            if (name != "." && name != "..") names.append(name);
+            if (native.WinFindNextFile(handle, native.Address(&found)) == 0) break;
+        }
+        native.WinFindClose(handle);
+        sort.Strings(&names);
+        return Result<[]string>.value(names);
+    }
+    argument := pathArgument("open", path);
+    if (argument.hasError()) return Result<[]string>.error(argument.error());
+    data := argument.unwrap();
+    directory := native.Opendir(native.Address(&data));
+    if (directory == 0 || directory == -1) return Result<[]string>.error(nativeError("open", path));
+    offset := runtime.MacOS() ? 21 : 19;
+    for (;;) {
+        entry := native.Readdir(directory);
+        if (entry == 0 || entry == -1) break;
+        name := native.FromC(entry + offset);
+        if (name != "." && name != "..") names.append(name);
+    }
+    native.Closedir(directory);
+    sort.Strings(&names);
+    return Result<[]string>.value(names);
+}
+
+// Mkdir creates a directory with permissions 0777, less the umask. It fails
+// if the path already exists.
+func Mkdir(path string) Result<bool> {
+    argument := pathArgument("mkdir", path);
+    if (argument.hasError()) return Result<bool>.error(argument.error());
+    data := argument.unwrap();
+    ok := runtime.Windows() ? native.WinCreateDirectory(native.Address(&data), 0) != 0 : native.Mkdir(native.Address(&data), 511) == 0;
+    if (!ok) return Result<bool>.error(nativeError("mkdir", path));
+    return Result<bool>.value(true);
+}
+
+func parentOf(path string) string {
+    end := len(path);
+    for (end > 0 && (path[end - 1] == '/' || (runtime.Windows() && path[end - 1] == '\\'))) end--;
+    for (end > 0 && path[end - 1] != '/' && !(runtime.Windows() && path[end - 1] == '\\')) end--;
+    for (end > 1 && (path[end - 1] == '/' || (runtime.Windows() && path[end - 1] == '\\'))) end--;
+    return path[:end];
+}
+
+// MkdirAll creates a directory and any missing parents. It succeeds if the
+// directory already exists, and fails if path exists but is not a directory.
+func MkdirAll(path string) Result<bool> {
+    info := Stat(path);
+    if (!info.hasError()) {
+        if (info.unwrap().IsDir()) return Result<bool>.value(true);
+        return Result<bool>.error("os: mkdir " + path + ": Not a directory");
+    }
+    parent := parentOf(path);
+    if (parent != "" && parent != path && !(runtime.Windows() && len(parent) == 2 && parent[1] == ':')) {
+        created := MkdirAll(parent);
+        if (created.hasError()) return created;
+    }
+    made := Mkdir(path);
+    if (made.hasError() && IsDir(path)) return Result<bool>.value(true);
+    return made;
+}
+
+// Remove deletes a file, a symbolic link, or an empty directory.
+func Remove(path string) Result<bool> {
+    argument := pathArgument("remove", path);
+    if (argument.hasError()) return Result<bool>.error(argument.error());
+    data := argument.unwrap();
+    if (runtime.Windows()) {
+        if (native.WinDeleteFile(native.Address(&data)) != 0) return Result<bool>.value(true);
+        failure := nativeError("remove", path);
+        // Directories, including directory symbolic links, need RemoveDirectoryW.
+        attributes := native.WinGetFileAttributes(native.Address(&data));
+        if (attributes == 4294967295 || (attributes & 16) == 0) return Result<bool>.error(failure);
+        if (native.WinRemoveDirectory(native.Address(&data)) != 0) return Result<bool>.value(true);
+        return Result<bool>.error(nativeError("remove", path));
+    }
+    if (native.Unlink(native.Address(&data)) == 0) return Result<bool>.value(true);
+    failure := nativeError("remove", path);
+    if (native.Rmdir(native.Address(&data)) == 0) return Result<bool>.value(true);
+    // Report rmdir's reason when the path was a directory, unlink's otherwise.
+    if (native.Errno() == 20) return Result<bool>.error(failure); // ENOTDIR
+    return Result<bool>.error(nativeError("remove", path));
+}
+
+func missing(message string) bool {
+    suffix := "No such file or directory";
+    return len(message) >= len(suffix) && message[len(message) - len(suffix):] == suffix;
+}
+
+// RemoveAll deletes path and, for a directory, everything inside it. It
+// does not follow symbolic links, and a missing path is not an error.
+func RemoveAll(path string) Result<bool> {
+    if (path == "") return Result<bool>.error("os: remove: empty path");
+    info := Lstat(path);
+    if (info.hasError()) {
+        if (missing(info.error())) return Result<bool>.value(true);
+        return Result<bool>.error(info.error());
+    }
+    if (info.unwrap().IsDir()) {
+        names := ListDir(path);
+        if (names.hasError()) return Result<bool>.error(names.error());
+        separator := (len(path) > 0 && (path[len(path) - 1] == '/' || path[len(path) - 1] == '\\')) ? "" : "/";
+        for (_, name := range names.unwrap()) {
+            removed := RemoveAll(path + separator + name);
+            if (removed.hasError()) return removed;
+        }
+    }
+    return Remove(path);
+}
+
+// Rename moves from to to, replacing an existing file at to.
+func Rename(from string, to string) Result<bool> {
+    source := pathArgument("rename", from);
+    if (source.hasError()) return Result<bool>.error(source.error());
+    target := pathArgument("rename", to);
+    if (target.hasError()) return Result<bool>.error(target.error());
+    a := source.unwrap();
+    b := target.unwrap();
+    // MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED
+    ok := runtime.Windows() ? native.WinMoveFileEx(native.Address(&a), native.Address(&b), 3) != 0 : native.Rename(native.Address(&a), native.Address(&b)) == 0;
+    if (!ok) return Result<bool>.error(nativeError("rename", from + " to " + to));
+    return Result<bool>.value(true);
+}
+
+// Chmod sets the permission bits of path, such as 0644 (420). On Windows
+// only the owner write bit is meaningful: clearing it makes the file read-only.
+func Chmod(path string, mode int) Result<bool> {
+    argument := pathArgument("chmod", path);
+    if (argument.hasError()) return Result<bool>.error(argument.error());
+    data := argument.unwrap();
+    // _S_IREAD | _S_IWRITE on Windows.
+    ok := runtime.Windows() ? native.WinChmod(native.Address(&data), (mode & 128) != 0 ? 384 : 256) == 0 : native.Chmod(native.Address(&data), mode & 4095) == 0;
+    if (!ok) return Result<bool>.error(nativeError("chmod", path));
+    return Result<bool>.value(true);
+}
+
+// Getwd returns the current working directory.
+func Getwd() Result<string> {
+    if (runtime.Windows()) {
+        buffer := native.Zeroed(65536);
+        n := native.WinGetCurrentDirectory(32768, native.Address(&buffer));
+        if (n == 0 || n >= 32768) return Result<string>.error(nativeError("getwd", ""));
+        return Result<string>.value(native.FromWide(native.Address(&buffer), n));
+    }
+    buffer := native.Zeroed(4096);
+    pointer := native.Getcwd(native.Address(&buffer), 4096);
+    if (pointer == 0 || pointer == -1) return Result<string>.error(nativeError("getwd", ""));
+    return Result<string>.value(native.FromC(pointer));
+}
+
+// Chdir changes the current working directory of the whole process.
+func Chdir(path string) Result<bool> {
+    argument := pathArgument("chdir", path);
+    if (argument.hasError()) return Result<bool>.error(argument.error());
+    data := argument.unwrap();
+    ok := runtime.Windows() ? native.WinSetCurrentDirectory(native.Address(&data)) != 0 : native.Chdir(native.Address(&data)) == 0;
+    if (!ok) return Result<bool>.error(nativeError("chdir", path));
+    return Result<bool>.value(true);
+}
+
+// Realpath returns the absolute path of an existing file with every
+// symbolic link, ".", and ".." resolved. On Windows it makes the path
+// absolute and normalizes it, without resolving links.
+func Realpath(path string) Result<string> {
+    argument := pathArgument("realpath", path);
+    if (argument.hasError()) return Result<string>.error(argument.error());
+    data := argument.unwrap();
+    if (runtime.Windows()) {
+        if (!Exists(path)) return Result<string>.error("os: realpath " + path + ": No such file or directory");
+        buffer := native.Zeroed(65536);
+        pointer := native.WinFullPath(native.Address(&buffer), native.Address(&data), 32768);
+        if (pointer == 0 || pointer == -1) return Result<string>.error(nativeError("realpath", path));
+        return Result<string>.value(native.FromWide(pointer, -1));
+    }
+    buffer := native.Zeroed(4096);
+    pointer := native.Realpath(native.Address(&data), native.Address(&buffer));
+    if (pointer == 0 || pointer == -1) return Result<string>.error(nativeError("realpath", path));
+    return Result<string>.value(native.FromC(pointer));
+}
+
+// Executable returns the absolute path of the running program.
+func Executable() Result<string> {
+    if (runtime.Windows()) {
+        buffer := native.Zeroed(65536);
+        n := native.WinGetModuleFileName(0, native.Address(&buffer), 32768);
+        if (n <= 0 || n >= 32768) return Result<string>.error(nativeError("executable", ""));
+        return Result<string>.value(native.FromWide(native.Address(&buffer), n));
+    }
+    if (runtime.MacOS()) {
+        buffer := native.Zeroed(4096);
+        size: u32 = 4096;
+        if (native.MacExecutablePath(native.Address(&buffer), (&size) -> int) != 0) return Result<string>.error("os: executable: path too long");
+        return Realpath(native.FromC(native.Address(&buffer)));
+    }
+    if (runtime.Linux()) {
+        link := native.CString("/proc/self/exe");
+        buffer := native.Zeroed(4096);
+        n := native.Readlink(native.Address(&link), native.Address(&buffer), 4095);
+        if (n <= 0) return Result<string>.error(nativeError("executable", ""));
+        return Result<string>.value(native.FromC(native.Address(&buffer)));
+    }
+    return Result<string>.error(unsupported("executable"));
+}
+
+// TempDir returns the directory for temporary files: TMPDIR (or TEMP/TMP on
+// Windows) when set, otherwise /tmp or the Windows temporary directory.
+func TempDir() string {
+    if (runtime.Windows()) {
+        buffer := native.Zeroed(65536);
+        n := native.WinGetTempPath(32768, native.Address(&buffer));
+        if (n > 0 && n < 32768) {
+            path := native.FromWide(native.Address(&buffer), n);
+            for (len(path) > 3 && (path[len(path) - 1] == '\\' || path[len(path) - 1] == '/')) path = path[:len(path) - 1];
+            return path;
+        }
+        return "C:\\Windows\\Temp";
+    }
+    value, ok := LookupEnv("TMPDIR");
+    if (ok && value != "") {
+        for (len(value) > 1 && value[len(value) - 1] == '/') value = value[:len(value) - 1];
+        return value;
+    }
+    return "/tmp";
+}
+
+func validPrefix(prefix string) bool {
+    for (i := 0; i < len(prefix); i++) { if (prefix[i] == '/' || prefix[i] == '\\' || prefix[i] == 0) return false; }
+    return true;
+}
+
+windowsTempCounter := 0;
+
+func windowsTempName(prefix string) string {
+    windowsTempCounter++;
+    clock := native.Zeroed(8);
+    native.WinSystemTime(native.Address(&clock));
+    stamp := native.ReadI64(native.Address(&clock));
+    if (stamp < 0) stamp = -stamp;
+    return TempDir() + "\\" + prefix + decimal(Getpid()) + "-" + decimal(stamp % 1000000007) + "-" + decimal(windowsTempCounter);
+}
+
+// MkdirTemp creates a new directory with a unique name beginning with
+// prefix inside TempDir(), readable only by the current user, and returns
+// its path. The caller removes it, for example with RemoveAll.
+func MkdirTemp(prefix string) Result<string> {
+    if (!validPrefix(prefix)) return Result<string>.error("os: mkdirtemp: prefix contains a path separator");
+    if (runtime.Windows()) {
+        for (attempt := 0; attempt < 100; attempt++) {
+            path := windowsTempName(prefix);
+            if (!Mkdir(path).hasError()) return Result<string>.value(path);
+        }
+        return Result<string>.error(nativeError("mkdirtemp", TempDir()));
+    }
+    template := native.CString(TempDir() + "/" + prefix + "XXXXXX");
+    pointer := native.Mkdtemp(native.Address(&template));
+    if (pointer == 0 || pointer == -1) return Result<string>.error(nativeError("mkdirtemp", TempDir()));
+    return Result<string>.value(native.FromC(pointer));
+}
+
+// CreateTemp creates a new empty file with a unique name beginning with
+// prefix inside TempDir(), readable and writable only by the current user,
+// and returns its path. Open it with Open; the caller removes it.
+func CreateTemp(prefix string) Result<string> {
+    if (!validPrefix(prefix)) return Result<string>.error("os: createtemp: prefix contains a path separator");
+    if (runtime.Windows()) {
+        for (attempt := 0; attempt < 100; attempt++) {
+            path := windowsTempName(prefix);
+            data := native.Wide(path).unwrap();
+            // _O_CREAT | _O_EXCL | _O_RDWR | _O_BINARY, _S_IREAD | _S_IWRITE
+            fd := native.WinOpen(native.Address(&data), 33026, 384);
+            if (fd >= 0) { native.WinCrtClose(fd); return Result<string>.value(path); }
+        }
+        return Result<string>.error(nativeError("createtemp", TempDir()));
+    }
+    template := native.CString(TempDir() + "/" + prefix + "XXXXXX");
+    fd := native.Mkstemp(native.Address(&template));
+    if (fd < 0) return Result<string>.error(nativeError("createtemp", TempDir()));
+    native.Close(fd);
+    return Result<string>.value(native.FromC(native.Address(&template)));
+}
+
+// ReadFile returns the whole contents of the file at path.
+func ReadFile(path string) Result<string> {
+    opened := Open(path, FileMode.Binary);
+    if (opened.hasError()) return Result<string>.error("os: open " + path + ": " + opened.error());
+    file := opened.unwrap();
+    defer file.Close();
+    data := file.Readall();
+    if (data.hasError()) return Result<string>.error("os: read " + path + ": " + data.error());
+    return Result<string>.value(data.unwrap()[:] -> string);
+}
+
+// WriteFile creates or truncates the file at path and writes text to it,
+// returning the number of bytes written.
+func WriteFile(path string, text string) Result<int> {
+    opened := Open(path, FileMode.BinaryWrite);
+    if (opened.hasError()) return Result<int>.error("os: open " + path + ": " + opened.error());
+    file := opened.unwrap();
+    defer file.Close();
+    if (len(text) == 0) return Result<int>.value(0);
+    written := file.Write(text);
+    if (written.hasError()) return Result<int>.error("os: write " + path + ": " + written.error());
+    return written;
+}

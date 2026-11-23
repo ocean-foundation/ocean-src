@@ -106,3 +106,53 @@ func TestRejectEmptyEnvironmentNames(t *testing.T) {
         if (result.error() != "exec: environment name is empty" && result.error() != "exec: environment entry requires NAME=value") t.Fatal("environment was not validated before spawn");
     }
 }
+
+func TestStdin(t *testing.T) {
+    if (windows()) { t.Skip("POSIX utility fixture"); return; }
+    c := Command("tr", "a-z", "A-Z");
+    c.SetStdin("hello\nworld");
+    if (c.Output().unwrap() != "HELLO\nWORLD") t.Fatal("stdin text");
+    big := "";
+    for (i := 0; i < 2000; i++) big = big + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde\n";
+    count := Command("wc", "-c");
+    count.SetStdin(big);
+    counted := count.Output().unwrap();
+    for (len(counted) > 0 && counted[0] == ' ') counted = counted[1:];
+    if (counted != "128000\n") t.Fatalf("large stdin: {}", counted);
+    empty := Command("wc", "-c");
+    empty.SetStdin("");
+    output := empty.Output().unwrap();
+    if (output != "0\n" && output != "       0\n") t.Fatalf("empty stdin: {}", output);
+}
+
+func TestStartWaitKill(t *testing.T) {
+    if (windows()) { t.Skip("POSIX utility fixture"); return; }
+    quick := Command("/bin/sh", "-c", "exit 3");
+    process := quick.Start().unwrap();
+    if (process.Pid <= 0) t.Fatal("Pid");
+    if (!process.Wait().hasError() || process.ExitCode != 3 || process.Signal != 0) t.Fatalf("exit 3: code {} signal {}", process.ExitCode, process.Signal);
+    if (!process.Wait().hasError() || process.ExitCode != 3) t.Fatal("second Wait");
+    if (!quick.Run().hasError()) t.Fatal("started command reused");
+
+    ok := Command("/bin/sh", "-c", "exit 0");
+    success := ok.Start().unwrap();
+    if (success.Wait().unwrap() != 0) t.Fatal("successful Wait");
+
+    slow := Command("sleep", "30");
+    running := slow.Start().unwrap();
+    if (running.Poll().unwrap()) t.Fatal("sleep finished immediately");
+    running.Kill().unwrap();
+    if (!running.Wait().hasError() || running.Signal != 9 || running.ExitCode != -1) t.Fatalf("killed: code {} signal {}", running.ExitCode, running.Signal);
+    if (!running.Poll().unwrap()) t.Fatal("Poll after Wait");
+    if (!running.Kill().hasError()) t.Fatal("Kill after Wait");
+
+    fed := Command("/bin/sh", "-c", "read line; test \"$line\" = ping");
+    fed.SetStdin("ping\n");
+    started := fed.Start().unwrap();
+    if (started.Wait().hasError()) t.Fatal("Start with stdin");
+
+    missing := Command("/definitely/no/executable");
+    if (!missing.Start().hasError()) t.Fatal("Start of a missing executable");
+    unstarted: Process;
+    if (!unstarted.Wait().hasError() || !unstarted.Kill().hasError()) t.Fatal("zero Process");
+}

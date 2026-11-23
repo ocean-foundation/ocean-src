@@ -1,38 +1,18 @@
 package term;
+import "runtime";
 
 // Kernel ABI: Linux termios (36 bytes), Darwin termios (72 bytes), or a
 // Win32 console mode DWORD. Nine contiguous 64-bit words preserve all 72
 // bytes without relying on Ocean collection headers at the native boundary.
 struct settings { a, b, c, d, e, f, g, h, i int; }
 
+// 1 Linux, 2 macOS, 3 Windows, 0 unsupported (Wasm).
 func platform() int {
-    kind := 0;
-    asm x86_64/linux {
-        mov qword ptr ${kind}, 1
-    }
-    asm aarch64/linux {
-        mov x0, #1
-        str x0, ${kind}
-    }
-    asm riscv64/linux {
-        li a0, 1
-        sd a0, ${kind}
-    }
-    asm x86_64/macos {
-        mov qword ptr ${kind}, 2
-    }
-    asm aarch64/macos {
-        mov x0, #2
-        str x0, ${kind}
-    }
-    asm x86_64/windows {
-        mov qword ptr ${kind}, 3
-    }
-    asm aarch64/windows {
-        mov x0, #3
-        str x0, ${kind}
-    }
-    return kind;
+    os := runtime.OS();
+    if (os == "linux") return 1;
+    if (os == "macos") return 2;
+    if (os == "windows") return 3;
+    return 0;
 }
 
 // Returns negative errno-style status; -4096 means unsupported target.

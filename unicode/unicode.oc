@@ -1,0 +1,124 @@
+package unicode;
+
+// Unicode character properties for code points held in an int. Categories
+// follow the Unicode general categories; IsSpace uses the White_Space property.
+// Invalid code points (negative or above MaxRune) have no properties.
+
+// MaxRune is the largest Unicode code point.
+MaxRune := 1114111;
+// ReplacementChar is U+FFFD, used in place of invalid input.
+ReplacementChar := 65533;
+
+func inRanges(table *[]int, c int) bool {
+    lo := 0;
+    hi := len(*table) / 2 - 1;
+    for (lo <= hi) {
+        mid := (lo + hi) / 2;
+        if (c < (*table)[mid * 2]) hi = mid - 1;
+        else if (c > (*table)[mid * 2 + 1]) lo = mid + 1;
+        else return true;
+    }
+    return false;
+}
+
+// IsLetter reports whether c is a letter (categories Lu, Ll, Lt, Lm, Lo).
+func IsLetter(c int) bool {
+    if (c < 128) return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    return inRanges(&letterRanges, c);
+}
+
+// IsUpper reports whether c is an upper-case letter (Lu).
+func IsUpper(c int) bool {
+    if (c < 128) return c >= 'A' && c <= 'Z';
+    return inRanges(&upperRanges, c);
+}
+
+// IsLower reports whether c is a lower-case letter (Ll).
+func IsLower(c int) bool {
+    if (c < 128) return c >= 'a' && c <= 'z';
+    return inRanges(&lowerRanges, c);
+}
+
+// IsTitle reports whether c is a title-case letter (Lt).
+func IsTitle(c int) bool { return c >= 128 && inRanges(&titleRanges, c); }
+
+// IsDigit reports whether c is a decimal digit (Nd), in any script.
+func IsDigit(c int) bool {
+    if (c < 128) return c >= '0' && c <= '9';
+    return inRanges(&digitRanges, c);
+}
+
+// IsNumber reports whether c is any number (Nd, Nl, No).
+func IsNumber(c int) bool {
+    if (c < 128) return c >= '0' && c <= '9';
+    return inRanges(&numberRanges, c);
+}
+
+// IsPunct reports whether c is punctuation (categories P*).
+func IsPunct(c int) bool { return inRanges(&punctRanges, c); }
+
+// IsSymbol reports whether c is a symbol (categories S*), such as + or €.
+func IsSymbol(c int) bool { return inRanges(&symbolRanges, c); }
+
+// IsMark reports whether c is a combining mark (categories M*).
+func IsMark(c int) bool { return inRanges(&markRanges, c); }
+
+// IsControl reports whether c is a control character (Cc).
+func IsControl(c int) bool { return inRanges(&controlRanges, c); }
+
+// IsSpace reports whether c has the Unicode White_Space property, which
+// includes ASCII space, tab, newline, vertical tab, form feed and return.
+func IsSpace(c int) bool {
+    if (c < 128) return c == ' ' || (c >= 9 && c <= 13);
+    return inRanges(&spaceRanges, c);
+}
+
+// IsPrint reports whether c is a letter, mark, number, punctuation, symbol
+// or the ASCII space: characters that print visibly.
+func IsPrint(c int) bool {
+    if (c == ' ') return true;
+    return IsLetter(c) || IsMark(c) || IsNumber(c) || IsPunct(c) || IsSymbol(c);
+}
+
+// IsIdentStart reports whether c can begin an Ocean identifier: an ASCII
+// letter, '_', or an XID_Start character.
+func IsIdentStart(c int) bool {
+    if (c < 128) return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+    return inRanges(&identStartRanges, c);
+}
+
+// IsIdentContinue reports whether c can continue an Ocean identifier: an
+// ASCII letter or digit, '_', or an XID_Continue character.
+func IsIdentContinue(c int) bool {
+    if (c < 128) return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+    return inRanges(&identContinueRanges, c);
+}
+
+func mapCase(table *[]int, c int) int {
+    lo := 0;
+    hi := len(*table) / 4 - 1;
+    for (lo <= hi) {
+        mid := (lo + hi) / 2;
+        start := (*table)[mid * 4];
+        if (c < start) hi = mid - 1;
+        else if (c > (*table)[mid * 4 + 1]) lo = mid + 1;
+        else {
+            if ((c - start) % (*table)[mid * 4 + 2] != 0) return c;
+            return c + (*table)[mid * 4 + 3];
+        }
+    }
+    return c;
+}
+
+// ToUpper maps c to upper case using one-to-one (simple) case mappings;
+// characters without one, such as 'ß', are returned unchanged.
+func ToUpper(c int) int {
+    if (c < 128) return c >= 'a' && c <= 'z' ? c - 32 : c;
+    return mapCase(&toUpperTable, c);
+}
+
+// ToLower maps c to lower case using one-to-one (simple) case mappings.
+func ToLower(c int) int {
+    if (c < 128) return c >= 'A' && c <= 'Z' ? c + 32 : c;
+    return mapCase(&toLowerTable, c);
+}

@@ -1,0 +1,36 @@
+package utf8_test;
+
+import "testing";
+import "unicode/utf8";
+
+func TestDecode(t *testing.T) {
+    text := "aé日😀";
+    c, w := utf8.Decode(text, 0);
+    if (c != 'a' || w != 1) t.Error("ascii");
+    c, w = utf8.Decode(text, 1);
+    if (c != 'é' || w != 2) t.Error("two bytes");
+    c, w = utf8.Decode(text, 3);
+    if (c != '日' || w != 3) t.Error("three bytes");
+    c, w = utf8.Decode(text, 6);
+    if (c != 128512 || w != 4) t.Error("four bytes");
+    c, w = utf8.Decode(text, 10);
+    if (c != utf8.RuneError || w != 0) t.Error("end");
+    for (_, bad := range []string{"\x80", "\xc0\xaf", "\xe0\x80\xaf", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xe6\x97"}) {
+        c, w = utf8.Decode(bad, 0);
+        if (c != utf8.RuneError || w != 1) t.Errorf("invalid sequence of {} bytes", len(bad));
+    }
+    c, w = utf8.DecodeLast(text);
+    if (c != 128512 || w != 4) t.Error("DecodeLast");
+    c, w = utf8.DecodeLast("ab\x80");
+    if (c != utf8.RuneError || w != 1) t.Error("DecodeLast invalid");
+}
+
+func TestEncode(t *testing.T) {
+    if (utf8.Encode('a') != "a" || utf8.Encode('é') != "é" || utf8.Encode(128512) != "😀") t.Error("Encode");
+    if (utf8.Encode(55296) != "\xef\xbf\xbd" || utf8.Encode(-1) != "\xef\xbf\xbd") t.Error("Encode invalid");
+    if (utf8.Len('a') != 1 || utf8.Len('é') != 2 || utf8.Len('日') != 3 || utf8.Len(128512) != 4 || utf8.Len(55296) != -1) t.Error("Len");
+    if (!utf8.Valid("aé日😀") || utf8.Valid("a\xffb") || !utf8.Valid("")) t.Error("Valid");
+    if (utf8.Count("aé日😀") != 4 || utf8.Count("a\xffb") != 3) t.Error("Count");
+    runes := utf8.Runes("hé");
+    if (len(runes) != 2 || runes[1] != 'é' || utf8.FromRunes(runes) != "hé") t.Error("Runes");
+}

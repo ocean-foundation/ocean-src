@@ -1,0 +1,27 @@
+package native_test;
+
+import "internal/native";
+import "testing";
+import "runtime";
+
+func TestPosixBridges(t *testing.T) {
+    if (runtime.Windows()) t.Skip("POSIX bridges");
+    name := native.CString("HOME");
+    if (native.FromC(native.Getenv(native.Address(&name))) == "") t.Error("Getenv HOME");
+    missing := native.CString("/definitely/not/here");
+    st := native.Zeroed(256);
+    if (native.Stat(native.Address(&missing), native.Address(&st)) != -1) t.Error("Stat of a missing path should fail");
+    if (native.Errno() != 2) t.Errorf("errno = {}, want ENOENT", native.Errno());
+    if (native.LastError() != "No such file or directory") t.Errorf("LastError = {}", native.LastError());
+    if (native.Getpid() <= 0) t.Error("Getpid");
+    buf := native.Zeroed(4096);
+    if (native.FromC(native.Getcwd(native.Address(&buf), 4096)) == "") t.Error("Getcwd");
+}
+
+func TestWide(t *testing.T) {
+    wide := native.Wide("aé😀").unwrap();
+    if (len(wide) != 10) t.Errorf("Wide length {}", len(wide));
+    if (native.FromWide(native.Address(&wide), -1) != "aé😀") t.Error("FromWide round trip");
+    if (native.FromWide(native.Address(&wide), 1) != "a") t.Error("FromWide count");
+    if (!native.Wide("\xff").hasError()) t.Error("Wide invalid");
+}

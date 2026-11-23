@@ -15,10 +15,19 @@ struct nativeCommand {
     error buffer<i8>;
 }
 extern i32 ocean_process_run(*nativeCommand command);
+extern i32 ocean_process_run_input(*nativeCommand command, buffer<i8> input, int size, int hasInput);
+extern i32 ocean_process_start(*nativeCommand command, buffer<i8> input, int size, int hasInput, *int handle, *int pid);
+extern i32 ocean_process_wait(int handle, int block, *int exitCode, *int signal);
+extern i32 ocean_process_kill(int handle);
 extern buffer<i8> ocean_process_lookpath(buffer<i8> name);
 extern void free(*void pointer);
 
-struct Cmd { Path string; Args []string; Dir string; Env []string; ExitCode int; used bool; }
+struct Cmd { Path string; Args []string; Dir string; Env []string; ExitCode int; used bool; input string; hasInput bool; }
+
+// SetStdin makes the command read text as its standard input, instead of
+// inheriting this process's. The text is staged in a temporary file, so any
+// amount can be supplied without blocking.
+func (c *Cmd) SetStdin(text string) { c.input = text; c.hasInput = true; }
 func Command(name string, args ...string) Cmd { c: Cmd; c.Path = name; c.Args = args; c.ExitCode = -1; return c; }
 func clean(text string) bool {
     for (_, c := range text) { if (c == 0) return false; }
@@ -29,7 +38,13 @@ func copyCString(raw buffer<i8>) string {
     if ((raw -> int) != 0) { for (i := 0; raw[i] != 0; i++) bytes.append(raw[i]); }
     return bytes -> string;
 }
-func (c *Cmd) execute(capture bool, combined bool) Result<string> {
+// Process is a command started with Start. Pid is its operating-system
+// process ID. After Wait (or a Poll that reports completion), ExitCode holds
+// the exit status, or -1 if the process was ended by a signal, whose number is
+// then in Signal (POSIX only).
+struct Process { Pid int; ExitCode int; Signal int; handle int; done bool; }
+
+func (c *Cmd) execute(capture bool, combined bool, start *Process) Result<string> {
     if (c.used) return Result<string>.error("exec: command already started");
     c.used = true;
     c.ExitCode = -1;
@@ -56,6 +71,8 @@ func (c *Cmd) execute(capture bool, combined bool) Result<string> {
     for (i := 0; i < len(envStorage); i++) envPointers.append(envStorage[i].data -> int);
     envPointers.append(0);
     directory := (c.Dir + "\0") -> []i8;
+    // One spare byte keeps the input buffer non-empty for the native call.
+    input := (c.input + "\0") -> []i8;
     native: nativeCommand;
     native.path = storage[0].data;
     native.argv = argv.data -> (*void);
@@ -66,7 +83,17 @@ func (c *Cmd) execute(capture bool, combined bool) Result<string> {
     native.output = zero(buffer<i8>);
     native.error = zero(buffer<i8>);
     native.exitCode = -1;
-    code := extern.ocean_process_run(&native);
+    if (start != null) {
+        handle := 0;
+        pid := -1;
+        code := extern.ocean_process_start(&native, input.data, len(c.input), c.hasInput ? 1 : 0, &handle, &pid);
+        if (code != 0) return Result<string>.error(copyCString(native.error));
+        start.handle = handle;
+        start.Pid = pid;
+        start.ExitCode = -1;
+        return Result<string>.value("");
+    }
+    code := c.hasInput ? extern.ocean_process_run_input(&native, input.data, len(c.input), 1) : extern.ocean_process_run(&native);
     c.ExitCode = native.exitCode;
     bytes := []i8{};
     if ((native.output -> int) != 0) {
@@ -81,13 +108,70 @@ func (c *Cmd) execute(capture bool, combined bool) Result<string> {
     if (code != 0) return Result<string>.error(copyCString(native.error));
     return Result<string>.value(bytes -> string);
 }
+
+// Start runs the command in the background with the parent's standard output
+// and error (and its standard input unless SetStdin was used). Call Wait on
+// the result to collect the exit status and release the process.
+func (c *Cmd) Start() Result<Process> {
+    process: Process;
+    started := c.execute(false, false, &process);
+    if (started.hasError()) return Result<Process>.error(started.error());
+    return Result<Process>.value(process);
+}
+
+func (p *Process) collect(block bool) Result<bool> {
+    if (p.done) return Result<bool>.value(true);
+    if (p.handle == 0) return Result<bool>.error("exec: process was not started");
+    exitCode := -1;
+    signal := 0;
+    state := extern.ocean_process_wait(p.handle, block ? 1 : 0, &exitCode, &signal);
+    if (state < 0) return Result<bool>.error("exec: wait failed");
+    if (state == 0) return Result<bool>.value(false);
+    p.done = true;
+    p.ExitCode = exitCode;
+    p.Signal = signal;
+    return Result<bool>.value(true);
+}
+
+// Wait blocks until the process exits and returns its exit code, or an
+// error if it failed (a nonzero exit or a signal), like Run. Waiting again
+// returns the same outcome.
+func (p *Process) Wait() Result<int> {
+    collected := p.collect(true);
+    if (collected.hasError()) return Result<int>.error(collected.error());
+    if (p.Signal != 0) return Result<int>.error("exec: process ended by signal " + decimal(p.Signal));
+    if (p.ExitCode != 0) return Result<int>.error("exec: process exited unsuccessfully");
+    return Result<int>.value(0);
+}
+
+// Poll reports whether the process has exited, without blocking. Once it
+// returns true, ExitCode and Signal are set and Wait returns immediately.
+func (p *Process) Poll() Result<bool> { return p.collect(false); }
+
+// Kill ends the process immediately (SIGKILL, or TerminateProcess on
+// Windows). Call Wait afterwards to release it. Killing a process that has
+// already been waited for is an error.
+func (p *Process) Kill() Result<bool> {
+    if (p.done) return Result<bool>.error("exec: process already finished");
+    if (p.handle == 0) return Result<bool>.error("exec: process was not started");
+    if (extern.ocean_process_kill(p.handle) != 0) return Result<bool>.error("exec: kill failed");
+    return Result<bool>.value(true);
+}
+
+func decimal(n int) string {
+    if (n == 0) return "0";
+    digits := []i8{};
+    for (n > 0) { digits.prepend(('0' + n % 10) -> i8); n = n / 10; }
+    return digits -> string;
+}
+
 func (c *Cmd) Run() Result<int> {
-    result := c.execute(false, false);
+    result := c.execute(false, false, null);
     if (result.hasError()) return Result<int>.error(result.error());
     return Result<int>.value(c.ExitCode);
 }
-func (c *Cmd) Output() Result<string> { return c.execute(true, false); }
-func (c *Cmd) CombinedOutput() Result<string> { return c.execute(true, true); }
+func (c *Cmd) Output() Result<string> { return c.execute(true, false, null); }
+func (c *Cmd) CombinedOutput() Result<string> { return c.execute(true, true, null); }
 
 func LookPath(name string) Result<string> {
     if (name == "" || !clean(name)) return Result<string>.error("exec: invalid executable");

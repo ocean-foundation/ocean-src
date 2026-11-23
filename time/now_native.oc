@@ -1,0 +1,19 @@
+package time;
+
+import "internal/native";
+import "runtime";
+
+// Now returns the wall-clock time in nanoseconds since the Unix epoch
+// (1970-01-01 00:00:00 UTC). Unlike Monotonic, it can jump when the system
+// clock is changed; use Monotonic to measure durations.
+func Now() int {
+    if (runtime.Windows()) {
+        // FILETIME counts 100ns ticks since 1601-01-01.
+        ticks := native.Zeroed(8);
+        native.WinSystemTime(native.Address(&ticks));
+        return (native.ReadI64(native.Address(&ticks)) - 116444736000000000) * 100;
+    }
+    stamp := native.Zeroed(16);
+    if (native.ClockGettime(0, native.Address(&stamp)) != 0) panic "wall clock unavailable on this platform";
+    return native.ReadI64(native.Address(&stamp)) * 1000000000 + native.ReadI64(native.Address(&stamp) + 8);
+}

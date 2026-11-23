@@ -1,0 +1,7 @@
+package runtime;
+
+// OS returns "js" for the JavaScript/WebAssembly target.
+func OS() string { return "js"; }
+
+// Arch returns "wasm" for the JavaScript/WebAssembly target.
+func Arch() string { return "wasm"; }

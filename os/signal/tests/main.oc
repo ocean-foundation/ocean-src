@@ -1,0 +1,18 @@
+package main;
+
+import "io";
+import "os/signal";
+
+// Blocks the termination signals, reports readiness, then collects two
+// signals sent by tests/test_signal.py and prints their names.
+func main() int {
+    signal.Block().unwrap();
+    io.Println("ready");
+    for (collected := 0; collected < 2;) {
+        number := signal.Wait(5000000000);
+        if (number == 0) { io.Println("timeout"); return 1; }
+        io.Println(signal.Name(number));
+        collected++;
+    }
+    return 0;
+}
