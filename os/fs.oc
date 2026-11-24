@@ -107,7 +107,8 @@ func IsDir(path string) bool {
 }
 
 // ListDir returns the names in a directory, excluding "." and "..", sorted
-// by unsigned byte order.
+// by unsigned byte order. On Windows, names with unpaired UTF-16 surrogates
+// cause ListDir to return an error.
 func ListDir(path string) Result<[]string> {
     if (nativeWindows()) return listWindowsDirectory(path);
     argument := pathArgument("open", path);
@@ -122,9 +123,11 @@ func ListDir(path string) Result<[]string> {
 func listPosixDirectory(directory int, path string) Result<[]string> {
     names := make([]string);
     offset := nativeMacOS() ? 21 : 19;
+    reader := native.ReaddirFunction();
+    if (reader == 0) return Result<[]string>.error(operationError("readdir", path, "native symbol unavailable"));
     for (;;) {
         native.SetErrno(0);
-        entry := native.Readdir(directory);
+        entry := native.Readdir(directory, reader);
         if (entry == 0 || entry == -1) {
             code := native.Errno();
             if (entry == -1 || code != 0) return Result<[]string>.error(operationError("readdir", path, native.ErrorText(code)));
@@ -232,8 +235,8 @@ func RemoveAll(path string) Result<bool> {
         code := native.Errno();
         return posixRemoveStatus(path, code);
     }
-    defer native.Close(directory);
-    return removeAllPosix(directory, leaf, path);
+    defer func() { if (directory >= 0) native.Close(directory); }();
+    return removeAllPosix(&directory, leaf, path);
 }
 
 func posixDirectoryFlags() int {
@@ -247,34 +250,75 @@ func posixRemoveStatus(path string, code int) Result<bool> {
     return Result<bool>.error(operationError("remove", path, native.ErrorText(code)));
 }
 
-func removeAllPosix(parent int, name string, path string) Result<bool> {
+struct directoryIdentity { device int; inode int; }
+
+func posixDirectoryIdentity(directory int, path string) Result<directoryIdentity> {
+    data := native.Zeroed(256);
+    base := native.Address(&data);
+    if (native.Fstat(directory, base) != 0) return Result<directoryIdentity>.error(nativeError("fstat", path));
+    device := nativeMacOS() ? native.ReadI32(base) : native.ReadI64(base);
+    return Result<directoryIdentity>.value(directoryIdentity{device, native.ReadI64(base + 8)});
+}
+
+func readPosixDirectory(directory int, path string) Result<[]string> {
+    dot := native.CString(".");
+    copy := native.Openat(directory, native.Address(&dot), posixDirectoryFlags());
+    if (copy < 0) return Result<[]string>.error(nativeError("opendir", path));
+    stream := native.Fdopendir(copy);
+    if (stream == 0 || stream == -1) {
+        failure := nativeError("opendir", path);
+        native.Close(copy);
+        return Result<[]string>.error(failure);
+    }
+    defer native.Closedir(stream);
+    return listPosixDirectory(stream, path);
+}
+
+func removeAllPosix(parent *int, name string, path string) Result<bool> {
     argument := native.CString(name);
     address := native.Address(&argument);
     mac := nativeMacOS();
     noFollow := mac ? 0x100 : (Arch() == "aarch64" ? 0x8000 : 0x20000);
-    directory := native.Openat(parent, address, posixDirectoryFlags() | noFollow);
+    directory := native.Openat(*parent, address, posixDirectoryFlags() | noFollow);
     if (directory < 0) {
         code := native.Errno();
         if (code != 20 && code != (mac ? 62 : 40)) return posixRemoveStatus(path, code); // ENOTDIR, ELOOP
-        if (native.Unlinkat(parent, address, 0) == 0) return Result<bool>.value(true);
+        if (native.Unlinkat(*parent, address, 0) == 0) return Result<bool>.value(true);
         code = native.Errno();
         return posixRemoveStatus(path, code);
     }
-    stream := native.Fdopendir(directory);
-    if (stream == 0 || stream == -1) {
-        failure := nativeError("opendir", path);
-        native.Close(directory);
-        return Result<bool>.error(failure);
-    }
-    defer native.Closedir(stream);
-    names := listPosixDirectory(stream, path);
+    defer func() { if (directory >= 0) native.Close(directory); }();
+    names := readPosixDirectory(directory, path);
     if (names.hasError()) return Result<bool>.error(names.error());
-    separator := (path[len(path) - 1] == PathSeparator()) ? "" : "/";
-    for (_, child := range names.unwrap()) {
-        removed := removeAllPosix(directory, child, path + separator + child);
-        if (removed.hasError()) return removed;
+    children := names.unwrap();
+    if (len(children) != 0) {
+        expected := posixDirectoryIdentity(*parent, path);
+        if (expected.hasError()) return Result<bool>.error(expected.error());
+        // Release this descriptor before descending. Recover it through the
+        // open child and verify its identity before using it for another lookup.
+        native.Close(*parent);
+        *parent = -1;
+        for (_, child := range children) {
+            removed := removeAllPosix(&directory, child, path + "/" + child);
+            if (removed.hasError()) return removed;
+        }
+        up := native.CString("..");
+        reopened := native.Openat(directory, native.Address(&up), posixDirectoryFlags() | (mac ? 0x40000000 : 0x200000));
+        if (reopened < 0) return Result<bool>.error(nativeError("open parent", path));
+        actual := posixDirectoryIdentity(reopened, path);
+        if (actual.hasError()) {
+            native.Close(reopened);
+            return Result<bool>.error(actual.error());
+        }
+        before := expected.unwrap();
+        after := actual.unwrap();
+        if (before.device != after.device || before.inode != after.inode) {
+            native.Close(reopened);
+            return Result<bool>.error(operationError("remove", path, "directory changed during traversal"));
+        }
+        *parent = reopened;
     }
-    if (native.Unlinkat(parent, address, mac ? 0x80 : 0x200) == 0) return Result<bool>.value(true); // AT_REMOVEDIR
+    if (native.Unlinkat(*parent, address, mac ? 0x80 : 0x200) == 0) return Result<bool>.value(true); // AT_REMOVEDIR
     code := native.Errno();
     return posixRemoveStatus(path, code);
 }

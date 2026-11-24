@@ -54,8 +54,10 @@ func main() int {
         assert validated.returncode==0,(validated.stdout,validated.stderr)
         cached_modules.append(module.read_bytes())
     build('check',source)
-    build('build',stdlib/'net/http','-o',root/'http.o')
+    # Exercise the standalone library through the uncached build path. The
+    # cached executable builds above cover Wasm package-cache reuse.
     env['OCEAN_BUILD_CACHE']='off'
+    build('build',stdlib/'net/http','-o',root/'http.o')
     build('build',source,'-o',module)
     script=root/'run.cjs'
     script.write_text(r'''

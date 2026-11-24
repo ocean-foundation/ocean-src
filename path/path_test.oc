@@ -55,6 +55,10 @@ func TestRel(t *testing.T) {
     if (rel("C:\\Users\\Me", "c:/users/me/docs", true).unwrap() != "docs") t.Error("rel windows case");
     if (!rel("/a", "b", true).hasError() || rel("/a", "/b", true).unwrap() != "../b" ||
         join([]string{"C:", rel("C:", "C:logs", true).unwrap()}, true) != "C:logs") t.Error("rel Windows rootedness");
+    if (rel("//SÉRVEUR/Équipe/Dir", "//sérveur/équipe/dir/logs", true).unwrap() != "logs")
+        t.Error("rel Windows UNC Unicode case");
+    if (!rel("//server/Équipe/dir", "//server/Autre/dir", true).hasError() ||
+        rel("/Équipe", "/équipe", false).unwrap() != "../équipe") t.Error("rel distinct path names");
     if (!rel("C:/a", "D:/a", true).hasError()) t.Error("rel windows volumes");
 }
 

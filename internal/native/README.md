@@ -6,7 +6,7 @@ Private to the standard library; its API can change at any time.
 per C-library or Win32 call, with a block for each target that provides it
 (x86-64/AArch64/RISC-V64 Linux, x86-64/AArch64 macOS, x86-64/AArch64 Windows).
 Arguments and results are 64-bit slots; pointers are passed as addresses. Where a
-target lacks the function, including Wasm, a bridge returns -1. The calling
+target lacks a value-returning function, including Wasm, its bridge returns -1. The calling
 sequences match the compiler's own bridges.
 
 `native.oc` is generated. Edit the table in `generate.py` and run
@@ -20,10 +20,19 @@ names. Structures therefore use the 64-bit inode layouts on every macOS target.
 `helpers.oc` converts strings (C strings and UTF-16 for Win32), reads errno and
 its message, and reads native structure fields.
 
-To check a target from a host with Clang, emit and assemble its LLVM IR. For
-example, from the directory of a program that imports a native-backed package:
+To check an entire AArch64 Linux program with the CI compiler, run both
+commands on an AArch64 Linux host from the directory of a program that imports
+a native-backed package:
 
 ```sh
-OCEAN_CROSS_TARGET=aarch64-linux ocean build --emit-llvm -o /tmp/native-aarch64.ll .
+ocean build --emit-llvm -o /tmp/native-aarch64.ll .
 clang --target=aarch64-unknown-linux-gnu -c -O1 -x ir /tmp/native-aarch64.ll -o /tmp/native-aarch64.o
+```
+
+For foreign assembly checks, build `asm_backend_probe` from the pinned
+`ocean-c` checkout and run the same driver used by CI from the standard-library
+repository root:
+
+```sh
+python3 net/http/tests/assembly.py /path/to/asm_backend_probe "$(command -v clang)"
 ```

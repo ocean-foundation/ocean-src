@@ -91,7 +91,13 @@ func listWindowsDirectory(path string) Result<[]string> {
     entries := windowsDirectoryEntries(handle, path);
     if (entries.hasError()) return Result<[]string>.error(entries.error());
     names := make([]string);
-    for (_, name := range entries.unwrap()) names.append(native.FromWide(native.Address(&name), len(name) / 2));
+    for (_, name := range entries.unwrap()) {
+        address := native.Address(&name);
+        count := len(name) / 2;
+        if (!native.ValidWide(address, count))
+            return Result<[]string>.error(operationError("readdir", path, "entry name contains an unpaired UTF-16 surrogate"));
+        names.append(native.FromWide(address, count));
+    }
     sort.Strings(&names);
     return Result<[]string>.value(names);
 }
@@ -101,7 +107,8 @@ func windowsRemoveRootOrDot(path string, leaf string) bool {
     // A DOS device path with only its device name can denote a volume root.
     if (len(path) >= 4 && windowsPathSeparator(path[0]) && windowsPathSeparator(path[1]) &&
         (path[2] == '?' || path[2] == '.') && windowsPathSeparator(path[3])) {
-        return path[4:] == leaf;
+        if (path[4:] == leaf) return true;
+        if (path[2] == '?') return false;
     }
     // Win32 normalizes ordinary paths with trailing spaces and dots.
     for (i := 0; i < len(leaf); i++) {
@@ -119,8 +126,14 @@ func removeAllWindows(path string) Result<bool> {
     argument := wideArgument("remove", path);
     if (argument.hasError()) return Result<bool>.error(argument.error());
     data := argument.unwrap();
-    // DELETE | FILE_READ_ATTRIBUTES, OPEN_EXISTING, BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
-    handle, code := openWindowsFile(native.Address(&data), 0x10080, 0, 3, 0x02200000);
+    // DELETE | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY, OPEN_EXISTING,
+    // BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
+    address := native.Address(&data);
+    handle, code := openWindowsFile(address, 0x10081, 0, 3, 0x02200000);
+    if (handle == -1 && code == 5) {
+        // A leaf can be deletable even when the caller cannot read its data.
+        handle, code = openWindowsFile(address, 0x10080, 0, 3, 0x02200000);
+    }
     if (handle == -1 || handle == 0) return windowsRemoveStatus(path, code);
     defer native.WinCloseHandle(handle);
     ntdll := windowsModule("ntdll.dll", false);
@@ -138,9 +151,14 @@ func openWindowsChild(parent int, name *[]i8, open int, translate int) (int, u32
     attributes := [6]int{48, parent, unicodeName.data -> int, 0, 0, 0};
     statusBlock := [2]int{};
     handle := 0;
-    // DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, share all,
+    // DELETE | FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY | SYNCHRONIZE,
     // FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT.
-    status, _ := windowsCallArgs(open, [7]int{(&handle) -> int, 0x110080, attributes.data -> int, statusBlock.data -> int, 7, 0x200020, 0});
+    args := [7]int{(&handle) -> int, 0x110081, attributes.data -> int, statusBlock.data -> int, 7, 0x200020, 0};
+    status, _ := windowsCallArgs(open, args);
+    if ((status -> u32) == 0xc0000022) { // STATUS_ACCESS_DENIED
+        args[1] = 0x110080;
+        status, _ = windowsCallArgs(open, args);
+    }
     if ((status -> i32) < 0) return 0, windowsCall(translate, status, 0, 0, 0) -> u32;
     return handle, 0;
 }
@@ -163,16 +181,11 @@ func removeWindowsHandle(handle int, path string, open int, translate int) Resul
 }
 
 func removeWindowsChildren(handle int, path string, open int, translate int) Result<bool> {
-    // Reopen the same directory with FILE_LIST_DIRECTORY access for enumeration.
-    directory, code := windowsCallWithError(windowsKernelSymbol("ReOpenFile"), handle, 1, 7, 0x02200000);
-    if (directory == -1 || directory == 0) return windowsRemoveStatus(path, code);
-    names := windowsDirectoryEntries(directory, path);
-    native.WinCloseHandle(directory);
+    names := windowsDirectoryEntries(handle, path);
     if (names.hasError()) return Result<bool>.error(names.error());
     for (_, name := range names.unwrap()) {
         childPath := path + "\\" + native.FromWide(native.Address(&name), len(name) / 2);
-        child := 0;
-        child, code = openWindowsChild(handle, &name, open, translate);
+        child, code := openWindowsChild(handle, &name, open, translate);
         if (child == 0) {
             missing := windowsRemoveStatus(childPath, code);
             if (missing.hasError()) return missing;

@@ -93,6 +93,7 @@ jobs:
           python3 ocean-src/net/http/tests/integration.py ocean-c/build/ocean-c
           python3 ocean-src/net/http/tests/integration.py ocean-c/build/ocean-c --cache "$RUNNER_TEMP/http-cache"
           OCEAN=ocean-c/build/ocean-c python3 ocean-src/os/signal/tests/test_signal.py
+          python3 ocean-src/os/tests/remove_all/test_remove_all.py ocean-c/build/ocean-c
           python3 ocean-src/net/http/tests/linking.py ocean-c/build/ocean-c
       - if: matrix.os == 'windows'
         name: Build and test Windows

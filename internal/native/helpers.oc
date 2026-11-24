@@ -45,6 +45,20 @@ func SetErrno(code int) {
     if (location != 0 && location != -1) *(location -> (*i32)) = code -> i32;
 }
 
+// The Darwin SDK adds ABI suffixes to some x86-64 symbols. A result of -1
+// selects the direct bridge on other targets, and zero is a failed lookup.
+func lookupDarwinX86(symbol string) int {
+    address := -1;
+    asm x86_64/macos { mov qword ptr ${address}, 0 }
+    if (address == 0) {
+        savedErrno := Errno();
+        name := CString(symbol);
+        address = Dlsym(-2, Address(&name)); // RTLD_DEFAULT
+        SetErrno(savedErrno);
+    }
+    return address;
+}
+
 // ErrorText describes a C errno value, for example "No such file or directory".
 func ErrorText(code int) string {
     text := Strerror(code);
@@ -102,6 +116,21 @@ func Wide(text string) Result<[]i8> {
     return Result<[]i8>.value(result);
 }
 
+// ValidWide reports whether count UTF-16 units contain only paired surrogates.
+func ValidWide(address int, count int) bool {
+    for (i := 0; i < count; i++) {
+        unit := ReadU16(address + i * 2);
+        if (unit >= 56320 && unit <= 57343) return false;
+        if (unit >= 55296 && unit <= 56319) {
+            i++;
+            if (i == count) return false;
+            next := ReadU16(address + i * 2);
+            if (next < 56320 || next > 57343) return false;
+        }
+    }
+    return true;
+}
+
 // FromWide converts UTF-16 at address to UTF-8. A negative count reads up to
 // a NUL unit; otherwise exactly count units are read. Unpaired surrogates
 // become U+FFFD.
@@ -130,4 +159,42 @@ func Zeroed(n int) []i8 {
     out := make([]i8);
     for (i := 0; i < n; i++) out.append(0);
     return out;
+}
+
+// WinOrdinalEqual uses Windows' uppercase table for an ordinal comparison.
+func WinOrdinalEqual(a *[]i8, b *[]i8) bool {
+    args := [4]int{Address(a), len(*a) / 2 - 1, Address(b), len(*b) / 2 - 1};
+    input := args.data -> int;
+    result := 0;
+    asm x86_64/windows {
+        mov r10, ${input}
+        mov rcx, [r10]
+        mov edx, [r10 + 8]
+        mov r8, [r10 + 16]
+        mov r9d, [r10 + 24]
+        sub rsp, 48
+        mov dword ptr [rsp + 32], 1
+        call CompareStringOrdinal
+        add rsp, 48
+        mov ${result}, rax
+    }
+    asm aarch64/windows {
+        ldr x0, ${input}
+        ldp x2, x3, [x0, #16]
+        ldp x0, x1, [x0]
+        mov w4, #1
+        sub sp, sp, #64
+        stp x9, x10, [sp]
+        stp x11, x12, [sp, #16]
+        stp x13, x14, [sp, #32]
+        stp x15, x30, [sp, #48]
+        bl CompareStringOrdinal
+        ldp x9, x10, [sp]
+        ldp x11, x12, [sp, #16]
+        ldp x13, x14, [sp, #32]
+        ldp x15, x30, [sp, #48]
+        add sp, sp, #64
+        str x0, ${result}
+    }
+    return (result -> i32) == 2; // CSTR_EQUAL
 }

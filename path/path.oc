@@ -2,6 +2,8 @@ package path;
 
 import "os";
 import "internal/native";
+import "unicode";
+import "unicode/utf8";
 
 // Lexical manipulation of file-system paths for the target platform. Results
 // use '/' as the separator on every platform. On Windows '\\' is accepted as
@@ -145,15 +147,25 @@ func splitParts(path string, root int) []string {
     return parts;
 }
 
-func sameVolume(a string, b string, windows bool) bool {
-    if (len(a) != len(b)) return false;
-    for (i := 0; i < len(a); i++) {
-        x := a[i]; y := b[i];
-        if (windows) {
-            if (x >= 'A' && x <= 'Z') x = x + 32;
-            if (y >= 'A' && y <= 'Z') y = y + 32;
-        }
-        if (x != y) return false;
+func samePathPart(a string, b string, windows bool) bool {
+    if (a == b) return true;
+    if (!windows) return false;
+    if (onWindows()) {
+        left := native.Wide(a);
+        right := native.Wide(b);
+        if (left.hasError() || right.hasError()) return false;
+        aw := left.unwrap();
+        bw := right.unwrap();
+        return native.WinOrdinalEqual(&aw, &bw);
+    }
+    // Use ordinal uppercase comparison when testing Windows path syntax
+    // on other hosts.
+    if (!utf8.Valid(a) || !utf8.Valid(b)) return false;
+    ar := utf8.Runes(a);
+    br := utf8.Runes(b);
+    if (len(ar) != len(br)) return false;
+    for (i := 0; i < len(ar); i++) {
+        if (unicode.ToUpper(ar[i]) != unicode.ToUpper(br[i])) return false;
     }
     return true;
 }
@@ -166,11 +178,11 @@ func rel(basePath string, target string, windows bool) Result<string> {
     br := rootLength(b, windows);
     tr := rootLength(t, windows);
     if ((br > bv) != (tr > tv)) return Result<string>.error("path: cannot make " + target + " relative to " + basePath);
-    if (!sameVolume(b[:bv], t[:tv], windows)) return Result<string>.error("path: " + target + " and " + basePath + " are on different volumes");
+    if (!samePathPart(b[:bv], t[:tv], windows)) return Result<string>.error("path: " + target + " and " + basePath + " are on different volumes");
     bp := splitParts(b, br);
     tp := splitParts(t, tr);
     common := 0;
-    for (common < len(bp) && common < len(tp) && (windows ? sameVolume(bp[common], tp[common], true) : bp[common] == tp[common])) common++;
+    for (common < len(bp) && common < len(tp) && samePathPart(bp[common], tp[common], windows)) common++;
     for (i := common; i < len(bp); i++) {
         if (bp[i] == "..") return Result<string>.error("path: cannot make " + target + " relative to " + basePath);
     }

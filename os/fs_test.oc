@@ -93,6 +93,11 @@ func TestRemoveAllDirectoryBoundary(t *testing.T) {
     os.WriteFile(target + "/kept", "x").unwrap();
     if (!os.RemoveAll(target + "/.//").hasError() || !os.Exists(target + "/kept"))
         t.Fatal("RemoveAll must reject a final dot before deleting anything");
+    if (os.OS() == "windows" && len(target) >= 2 && target[1] == ':') {
+        device := "\\\\.\\" + strings.ReplaceAll(target, "/", "\\");
+        if (!os.RemoveAll(device + "\\. ").hasError() || !os.Exists(target + "/kept"))
+            t.Error("RemoveAll must reject a normalized final dot in a device path");
+    }
     if (os.OS() != "windows") {
         directory := root + "/slash\\";
         os.Mkdir(directory).unwrap();

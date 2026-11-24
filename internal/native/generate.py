@@ -6,7 +6,7 @@ Run from the repository root: python3 internal/native/generate.py
 Each bridge calls one C library or Win32 function on the targets that provide
 it. Blocks for other targets are omitted at compile time, so a symbol that
 exists only on some platforms is never referenced elsewhere; on targets with
-no block (including Wasm) a bridge returns -1. Every argument and result is a
+no block (including Wasm) a value-returning bridge returns -1. Every argument and result is a
 64-bit integer slot; callers pass pointers as addresses. The calling sequences
 match the compiler's own bridges (compiler/util/native.oc).
 """
@@ -31,6 +31,7 @@ BRIDGES = {
     "Chdir": (1, "i32", {"posix": "chdir"}),
     # files and directories
     "Stat": (2, "i32", {"linux": "stat", "macos": "stat", "macos-x86_64": "stat$INODE64"}),
+    "Fstat": (2, "i32", {"posix": "fstat", "macos-x86_64": "fstat$INODE64"}),
     "Lstat": (2, "i32", {"linux": "lstat", "macos": "lstat", "macos-x86_64": "lstat$INODE64"}),
     "Mkdir": (2, "i32", {"posix": "mkdir"}),
     "Openat": (3, "i32", {"posix": "openat"}),
@@ -61,10 +62,10 @@ BRIDGES = {
     "Sigpending": (1, "i32", {"posix": "sigpending"}),
     "Sigwait": (2, "i32", {"posix": "sigwait"}),
     "MacSignalTryLock": (1, "i32", {"macos": "os_unfair_lock_trylock"}),
-    "MacSignalUnlock": (1, "i32", {"macos": "os_unfair_lock_unlock"}),
+    "MacSignalUnlock": (1, "void", {"macos": "os_unfair_lock_unlock"}),
     # Windows (UTF-16 paths and strings)
     "WinGetLastError": (0, "u32", {"windows": "GetLastError"}),
-    "WinSetLastError": (1, "i32", {"windows": "SetLastError"}),
+    "WinSetLastError": (1, "void", {"windows": "SetLastError"}),
     "WinGetEnvironmentVariable": (3, "u32", {"windows": "GetEnvironmentVariableW"}),
     "WinSetEnvironmentVariable": (2, "i32", {"windows": "SetEnvironmentVariableW"}),
     "WinGetCurrentProcessId": (0, "u32", {"windows": "GetCurrentProcessId"}),
@@ -82,7 +83,7 @@ BRIDGES = {
     "WinChmod": (2, "i32", {"windows": "_wchmod"}),
     "WinCloseHandle": (1, "i32", {"windows": "CloseHandle"}),
     "WinLocalFree": (1, "i64", {"windows": "LocalFree"}),
-    "WinSystemTime": (1, "i64", {"windows": "GetSystemTimePreciseAsFileTime"}),
+    "WinSystemTime": (1, "void", {"windows": "GetSystemTimePreciseAsFileTime"}),
 }
 
 X86_SYSV = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
@@ -122,7 +123,9 @@ def x86_sysv(n, symbol, kind):
     # LLVM's Intel-dialect inline assembly drops '$' from symbol names, so such
     # functions are resolved once with dlsym and called through a pointer.
     target = "qword ptr ${function}" if "$" in symbol else symbol
-    lines += ["        xor eax, eax", f"        call {target}", "        mov ${result}, rax"]
+    lines += ["        xor eax, eax", f"        call {target}"]
+    if kind != "void":
+        lines.append("        mov ${result}, rax")
     return "\n".join(lines)
 
 
@@ -131,7 +134,8 @@ def x86_win(n, symbol, kind):
     lines += ["        sub rsp, 32", f"        call {symbol}", "        add rsp, 32"]
     if kind == "u32":
         lines.append("        mov eax, eax")
-    lines.append("        mov ${result}, rax")
+    if kind != "void":
+        lines.append("        mov ${result}, rax")
     return "\n".join(lines)
 
 
@@ -140,13 +144,16 @@ def aarch64(n, symbol, kind):
     lines += [AARCH64_SAVE, f"        bl {quote(symbol)}", AARCH64_RESTORE]
     if kind == "u32":
         lines.append("        mov w0, w0")
-    lines.append("        str x0, ${result}")
+    if kind != "void":
+        lines.append("        str x0, ${result}")
     return "\n".join(lines)
 
 
 def riscv(n, symbol, kind):
     lines = [f"        ld {RISCV[i]}, ${{a{i}}}" for i in range(n)]
-    lines += [RISCV_SAVE, f"        call {symbol}", RISCV_RESTORE, "        sd a0, ${result}"]
+    lines += [RISCV_SAVE, f"        call {symbol}", RISCV_RESTORE]
+    if kind != "void":
+        lines.append("        sd a0, ${result}")
     return "\n".join(lines)
 
 
@@ -163,18 +170,19 @@ def symbol_for(symbols, platform, arch):
 
 def bridge(name, n, kind, symbols):
     params = ", ".join(f"a{i} int" for i in range(n))
-    out = [f"func {name}({params}) int {{", "    result := -1;"]
+    out = []
     indirect = [s for s in symbols.values() if "$" in s]
-    if indirect:
-        out += ["    function := -1;",
-                "    asm x86_64/macos { mov qword ptr ${function}, 0 }",
-                "    if (function == 0) {",
-                "        savedErrno := Errno();",
-                f'        name := CString("{indirect[0]}");',
-                "        function = Dlsym(-2, name.data -> int);",
-                "        if (function == 0) { SetErrno(78); return -1; }", # ENOSYS on Darwin
-                "        SetErrno(savedErrno);",
-                "    }"]
+    scan_local = name == "Readdir"
+    if scan_local:
+        out += ["func ReaddirFunction() int {", f'    return lookupDarwinX86("{indirect[0]}");', "}", ""]
+        params += ", function int"
+    result_type = "" if kind == "void" else " int"
+    out.append(f"func {name}({params}){result_type} {{")
+    if kind != "void":
+        out.append("    result := -1;")
+    if indirect and not scan_local:
+        out += [f'    function := lookupDarwinX86("{indirect[0]}");',
+                "    if (function == 0) { SetErrno(78); return -1; }"]  # ENOSYS on Darwin
     targets = [("x86_64", "linux", x86_sysv), ("aarch64", "linux", aarch64), ("riscv64", "linux", riscv),
                ("x86_64", "macos", x86_sysv), ("aarch64", "macos", aarch64),
                ("x86_64", "windows", x86_win), ("aarch64", "windows", aarch64)]
@@ -191,7 +199,7 @@ def bridge(name, n, kind, symbols):
         out.append("    }")
     if kind == "i32":
         out.append("    return (result -> i32) -> int;")
-    else:
+    elif kind != "void":
         out.append("    return result;")
     out.append("}")
     return "\n".join(out)
@@ -203,7 +211,7 @@ def main():
         "package native;",
         "",
         "// Generated by generate.py; do not edit. C-ABI bridges for the standard",
-        "// library: each returns -1 on targets that lack the function, including Wasm.",
+        "// library: value-returning bridges return -1 when the target lacks the function.",
         "// Arguments and results are 64-bit slots; pass pointers as addresses.",
         "",
     ]

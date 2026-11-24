@@ -15,7 +15,9 @@ func TestPosixBridges(t *testing.T) {
         if (present) { os.Setenv(key, previous); }
         else { os.Unsetenv(key); }
     }();
-    if (native.FromC(native.Getenv(native.Address(&name))) != "known value") t.Error("Getenv test value");
+    value := native.Getenv(native.Address(&name));
+    if (value == 0 || value == -1) t.Fatal("Getenv did not return a value");
+    if (native.FromC(value) != "known value") t.Error("Getenv test value");
     missing := native.CString("/definitely/not/here");
     st := native.Zeroed(256);
     if (native.Stat(native.Address(&missing), native.Address(&st)) != -1) t.Error("Stat of a missing path should fail");
@@ -32,4 +34,12 @@ func TestWide(t *testing.T) {
     if (native.FromWide(native.Address(&wide), -1) != "aé😀") t.Error("FromWide round trip");
     if (native.FromWide(native.Address(&wide), 1) != "a") t.Error("FromWide count");
     if (!native.Wide("\xff").hasError()) t.Error("Wide invalid");
+}
+
+func TestValidWide(t *testing.T) {
+    valid := native.Wide("�😀").unwrap();
+    if (!native.ValidWide(native.Address(&valid), 3)) t.Error("literal replacement character and surrogate pair");
+    high := []i8{0, -40};
+    low := []i8{0, -36};
+    if (native.ValidWide(native.Address(&high), 1) || native.ValidWide(native.Address(&low), 1)) t.Error("isolated surrogate");
 }

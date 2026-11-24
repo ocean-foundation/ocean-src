@@ -90,7 +90,6 @@ func Wait(nanoseconds int) int {
         if (number != 0 || remaining <= 0) return number;
         step := remaining < 10 * time.Millisecond ? remaining : 10 * time.Millisecond;
         time.Sleep(step);
-        if (time.Monotonic() - start >= nanoseconds) return 0;
     }
     return 0;
 }
