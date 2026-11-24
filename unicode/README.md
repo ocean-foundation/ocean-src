@@ -8,10 +8,13 @@ match Ocean's identifier rules; their tables are copied from the compiler.
 `ToUpper` and `ToLower` apply one-to-one (simple) case mappings. Invalid code
 points have no properties. `MaxRune` and `ReplacementChar` are exported.
 
-`tables.oc` is generated: run `python3 unicode/generate_tables.py > unicode/tables.oc`
-from the repository root with a Python whose `unicodedata` matches the intended
-Unicode version and the compiler checkout as a sibling (or pass its
-`compiler/scanner/unicode.oc` path as an argument).
+To regenerate `tables.oc`, download the matching `UnicodeData.txt` from the
+[Unicode Character Database](https://www.unicode.org/Public/16.0.0/ucd/UnicodeData.txt).
+From the repository root, run
+`python3 unicode/generate_tables.py 16.0.0 UnicodeData.txt > unicode/tables.oc`.
+The generator reads identifier tables from the sibling compiler checkout by
+default. Pass its `compiler/scanner/unicode.oc` path as a third argument to
+use another checkout.
 
 `unicode/utf8` encodes and decodes UTF-8: `Decode(text, offset)` and
 `DecodeLast(text)` return a code point and its byte width (invalid input gives

@@ -34,6 +34,8 @@ output = command.CombinedOutput().unwrap();
   `Poll() Result<bool>` (non-blocking completion check) and `Kill() Result<bool>`
   (SIGKILL or TerminateProcess). Always `Wait` to release the process. After a
   signal exit `ExitCode` is -1 and `Signal` holds the number (POSIX only).
+  Copies share the process and its completion result. Each copy updates its
+  result fields when its own `Wait` or `Poll` observes completion.
 
 A command may be executed once. Missing executables, invalid NUL-containing
 arguments/paths/environment entries, spawn failures, wait failures, and nonzero

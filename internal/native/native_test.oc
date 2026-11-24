@@ -6,8 +6,16 @@ import "os";
 
 func TestPosixBridges(t *testing.T) {
     if (os.OS() == "windows") t.Skip("POSIX bridges");
-    name := native.CString("HOME");
-    if (native.FromC(native.Getenv(native.Address(&name))) == "") t.Error("Getenv HOME");
+    if (native.WinGetCurrentProcessId() != -1) t.Error("unsupported Windows bridge should return -1");
+    key := "OCEAN_NATIVE_GETENV_TEST";
+    name := native.CString(key);
+    previous, present := os.LookupEnv(key);
+    if (os.Setenv(key, "known value").hasError()) t.Fatal("could not set test environment variable");
+    defer func() {
+        if (present) { os.Setenv(key, previous); }
+        else { os.Unsetenv(key); }
+    }();
+    if (native.FromC(native.Getenv(native.Address(&name))) != "known value") t.Error("Getenv test value");
     missing := native.CString("/definitely/not/here");
     st := native.Zeroed(256);
     if (native.Stat(native.Address(&missing), native.Address(&st)) != -1) t.Error("Stat of a missing path should fail");

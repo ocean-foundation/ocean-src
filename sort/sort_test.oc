@@ -31,6 +31,13 @@ func TestLargeAndStable(t *testing.T) {
         people.append(person{"p" + strconv.Itoa(i), seed % 20});
     }
     sort.Slice<person>(&people, func(a person, b person) bool { return a.age < b.age; });
+    seen := [1000]bool;
+    if (len(people) != len(seen)) t.Fatal("sort changed the number of people");
+    for (_, entry := range people) {
+        id := order(entry.name);
+        if (id < 0 || id >= len(seen) || entry.name != "p" + strconv.Itoa(id) || seen[id]) t.Fatalf("unexpected or repeated person {}", entry.name);
+        seen[id] = true;
+    }
     for (i := 1; i < len(people); i++) {
         if (people[i - 1].age > people[i].age) t.Fatalf("not sorted at {}", i);
         if (people[i - 1].age == people[i].age && order(people[i - 1].name) > order(people[i].name)) t.Fatalf("not stable at {}", i);

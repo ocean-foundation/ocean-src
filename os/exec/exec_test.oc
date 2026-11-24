@@ -130,9 +130,12 @@ func TestStartWaitKill(t *testing.T) {
     if (windows()) { t.Skip("POSIX utility fixture"); return; }
     quick := Command("/bin/sh", "-c", "exit 3");
     process := quick.Start().unwrap();
+    copy := process;
     if (process.Pid <= 0) t.Fatal("Pid");
     if (!process.Wait().hasError() || process.ExitCode != 3 || process.Signal != 0) t.Fatalf("exit 3: code {} signal {}", process.ExitCode, process.Signal);
     if (!process.Wait().hasError() || process.ExitCode != 3) t.Fatal("second Wait");
+    if (!copy.Kill().hasError() || !copy.Poll().unwrap() || copy.ExitCode != 3 || !copy.Wait().hasError())
+        t.Fatal("copied Process must use the collected result");
     if (!quick.Run().hasError()) t.Fatal("started command reused");
 
     ok := Command("/bin/sh", "-c", "exit 0");

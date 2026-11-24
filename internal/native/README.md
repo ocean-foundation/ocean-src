@@ -13,13 +13,17 @@ sequences match the compiler's own bridges.
 `python3 internal/native/generate.py` from the repository root. A bridge takes at
 most three arguments (AArch64 and RISC-V asm blocks allow four operands,
 including the result). On x86-64 macOS, functions whose symbols contain `$`
-(such as `stat$INODE64`) are resolved once with `dlsym` and called through a
+(such as `stat$INODE64`) are resolved with `dlsym` and called through a
 pointer, because LLVM's Intel-syntax inline assembly drops `$` from symbol
 names. Structures therefore use the 64-bit inode layouts on every macOS target.
 
 `helpers.oc` converts strings (C strings and UTF-16 for Win32), reads errno and
 its message, and reads native structure fields.
 
-To check every target from one host, emit and assemble each one with a
-self-hosted compiler: `OCEAN_CROSS_TARGET=<arch>-<os> ocean build --emit-llvm`,
-then `clang --target=<triple> -c`.
+To check a target from a host with Clang, emit and assemble its LLVM IR. For
+example, from the directory of a program that imports a native-backed package:
+
+```sh
+OCEAN_CROSS_TARGET=aarch64-linux ocean build --emit-llvm -o /tmp/native-aarch64.ll .
+clang --target=aarch64-unknown-linux-gnu -c -O1 -x ir /tmp/native-aarch64.ll -o /tmp/native-aarch64.o
+```

@@ -16,15 +16,14 @@ func ErrnoLocation() int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl __errno_location
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         addi sp, sp, -48
@@ -34,14 +33,13 @@ func ErrnoLocation() int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call __errno_location
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         xor eax, eax
@@ -53,15 +51,14 @@ func ErrnoLocation() int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl ___error
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm x86_64/windows {
         sub rsp, 32
@@ -74,15 +71,14 @@ func ErrnoLocation() int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _errno
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -101,15 +97,14 @@ func Strerror(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl strerror
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -120,14 +115,13 @@ func Strerror(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call strerror
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -141,15 +135,14 @@ func Strerror(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _strerror
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm x86_64/windows {
         mov rcx, ${a0}
@@ -164,15 +157,14 @@ func Strerror(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl strerror
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -191,15 +183,14 @@ func Getenv(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl getenv
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -210,14 +201,13 @@ func Getenv(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call getenv
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -231,15 +221,14 @@ func Getenv(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _getenv
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -262,15 +251,14 @@ func Setenv(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl setenv
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -283,14 +271,13 @@ func Setenv(a0 int, a1 int, a2 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call setenv
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -308,15 +295,14 @@ func Setenv(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _setenv
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -335,15 +321,14 @@ func Unsetenv(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl unsetenv
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -354,14 +339,13 @@ func Unsetenv(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call unsetenv
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -375,15 +359,14 @@ func Unsetenv(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _unsetenv
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -400,15 +383,14 @@ func Getpid() int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl getpid
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         addi sp, sp, -48
@@ -418,14 +400,13 @@ func Getpid() int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call getpid
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         xor eax, eax
@@ -437,15 +418,14 @@ func Getpid() int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _getpid
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -466,15 +446,14 @@ func Getcwd(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl getcwd
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -486,14 +465,13 @@ func Getcwd(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call getcwd
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -509,15 +487,14 @@ func Getcwd(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _getcwd
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -536,15 +513,14 @@ func Chdir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl chdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -555,14 +531,13 @@ func Chdir(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call chdir
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -576,26 +551,29 @@ func Chdir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _chdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
-
-statFunction := 0;
-statFunctionName := "stat$INODE64\0";
 
 func Stat(a0 int, a1 int) int {
     result := -1;
-    if (statFunction == 0) { name := statFunctionName -> []i8; statFunction = Dlsym(-2, name.data -> int); }
-    function := statFunction;
+    function := -1;
+    asm x86_64/macos { mov qword ptr ${function}, 0 }
+    if (function == 0) {
+        savedErrno := Errno();
+        name := CString("stat$INODE64");
+        function = Dlsym(-2, name.data -> int);
+        if (function == 0) { SetErrno(78); return -1; }
+        SetErrno(savedErrno);
+    }
     asm x86_64/linux {
         mov rdi, ${a0}
         mov rsi, ${a1}
@@ -610,15 +588,14 @@ func Stat(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl stat
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -630,14 +607,13 @@ func Stat(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call stat
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -653,26 +629,29 @@ func Stat(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _stat
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
 
-lstatFunction := 0;
-lstatFunctionName := "lstat$INODE64\0";
-
 func Lstat(a0 int, a1 int) int {
     result := -1;
-    if (lstatFunction == 0) { name := lstatFunctionName -> []i8; lstatFunction = Dlsym(-2, name.data -> int); }
-    function := lstatFunction;
+    function := -1;
+    asm x86_64/macos { mov qword ptr ${function}, 0 }
+    if (function == 0) {
+        savedErrno := Errno();
+        name := CString("lstat$INODE64");
+        function = Dlsym(-2, name.data -> int);
+        if (function == 0) { SetErrno(78); return -1; }
+        SetErrno(savedErrno);
+    }
     asm x86_64/linux {
         mov rdi, ${a0}
         mov rsi, ${a1}
@@ -687,15 +666,14 @@ func Lstat(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl lstat
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -707,14 +685,13 @@ func Lstat(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call lstat
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -730,15 +707,14 @@ func Lstat(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _lstat
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -759,15 +735,14 @@ func Mkdir(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl mkdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -779,14 +754,13 @@ func Mkdir(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call mkdir
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -802,17 +776,237 @@ func Mkdir(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _mkdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
+}
+
+func Openat(a0 int, a1 int, a2 int) int {
+    result := -1;
+    asm x86_64/linux {
+        mov rdi, ${a0}
+        mov rsi, ${a1}
+        mov rdx, ${a2}
+        xor eax, eax
+        call openat
+        mov ${result}, rax
+    }
+    asm aarch64/linux {
+        ldr x0, ${a0}
+        ldr x1, ${a1}
+        ldr x2, ${a2}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl openat
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    asm riscv64/linux {
+        ld a0, ${a0}
+        ld a1, ${a1}
+        ld a2, ${a2}
+        addi sp, sp, -48
+        sd ra, 0(sp)
+        sd t3, 8(sp)
+        sd t4, 16(sp)
+        sd t5, 24(sp)
+        sd t6, 32(sp)
+        call openat
+        ld ra, 0(sp)
+        ld t3, 8(sp)
+        ld t4, 16(sp)
+        ld t5, 24(sp)
+        ld t6, 32(sp)
+        addi sp, sp, 48
+        sd a0, ${result}
+    }
+    asm x86_64/macos {
+        mov rdi, ${a0}
+        mov rsi, ${a1}
+        mov rdx, ${a2}
+        xor eax, eax
+        call _openat
+        mov ${result}, rax
+    }
+    asm aarch64/macos {
+        ldr x0, ${a0}
+        ldr x1, ${a1}
+        ldr x2, ${a2}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl _openat
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return (result -> i32) -> int;
+}
+
+func Unlinkat(a0 int, a1 int, a2 int) int {
+    result := -1;
+    asm x86_64/linux {
+        mov rdi, ${a0}
+        mov rsi, ${a1}
+        mov rdx, ${a2}
+        xor eax, eax
+        call unlinkat
+        mov ${result}, rax
+    }
+    asm aarch64/linux {
+        ldr x0, ${a0}
+        ldr x1, ${a1}
+        ldr x2, ${a2}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl unlinkat
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    asm riscv64/linux {
+        ld a0, ${a0}
+        ld a1, ${a1}
+        ld a2, ${a2}
+        addi sp, sp, -48
+        sd ra, 0(sp)
+        sd t3, 8(sp)
+        sd t4, 16(sp)
+        sd t5, 24(sp)
+        sd t6, 32(sp)
+        call unlinkat
+        ld ra, 0(sp)
+        ld t3, 8(sp)
+        ld t4, 16(sp)
+        ld t5, 24(sp)
+        ld t6, 32(sp)
+        addi sp, sp, 48
+        sd a0, ${result}
+    }
+    asm x86_64/macos {
+        mov rdi, ${a0}
+        mov rsi, ${a1}
+        mov rdx, ${a2}
+        xor eax, eax
+        call _unlinkat
+        mov ${result}, rax
+    }
+    asm aarch64/macos {
+        ldr x0, ${a0}
+        ldr x1, ${a1}
+        ldr x2, ${a2}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl _unlinkat
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return (result -> i32) -> int;
+}
+
+func Fdopendir(a0 int) int {
+    result := -1;
+    function := -1;
+    asm x86_64/macos { mov qword ptr ${function}, 0 }
+    if (function == 0) {
+        savedErrno := Errno();
+        name := CString("fdopendir$INODE64");
+        function = Dlsym(-2, name.data -> int);
+        if (function == 0) { SetErrno(78); return -1; }
+        SetErrno(savedErrno);
+    }
+    asm x86_64/linux {
+        mov rdi, ${a0}
+        xor eax, eax
+        call fdopendir
+        mov ${result}, rax
+    }
+    asm aarch64/linux {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl fdopendir
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    asm riscv64/linux {
+        ld a0, ${a0}
+        addi sp, sp, -48
+        sd ra, 0(sp)
+        sd t3, 8(sp)
+        sd t4, 16(sp)
+        sd t5, 24(sp)
+        sd t6, 32(sp)
+        call fdopendir
+        ld ra, 0(sp)
+        ld t3, 8(sp)
+        ld t4, 16(sp)
+        ld t5, 24(sp)
+        ld t6, 32(sp)
+        addi sp, sp, 48
+        sd a0, ${result}
+    }
+    asm x86_64/macos {
+        mov rdi, ${a0}
+        xor eax, eax
+        call qword ptr ${function}
+        mov ${result}, rax
+    }
+    asm aarch64/macos {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl _fdopendir
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return result;
 }
 
 func Rmdir(a0 int) int {
@@ -829,15 +1023,14 @@ func Rmdir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl rmdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -848,14 +1041,13 @@ func Rmdir(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call rmdir
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -869,15 +1061,14 @@ func Rmdir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _rmdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -896,15 +1087,14 @@ func Unlink(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl unlink
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -915,14 +1105,13 @@ func Unlink(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call unlink
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -936,15 +1125,14 @@ func Unlink(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _unlink
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -965,15 +1153,14 @@ func Rename(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl rename
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -985,14 +1172,13 @@ func Rename(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call rename
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1008,15 +1194,14 @@ func Rename(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _rename
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -1037,15 +1222,14 @@ func Chmod(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl chmod
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1057,14 +1241,13 @@ func Chmod(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call chmod
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1080,26 +1263,29 @@ func Chmod(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _chmod
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
 
-opendirFunction := 0;
-opendirFunctionName := "opendir$INODE64\0";
-
 func Opendir(a0 int) int {
     result := -1;
-    if (opendirFunction == 0) { name := opendirFunctionName -> []i8; opendirFunction = Dlsym(-2, name.data -> int); }
-    function := opendirFunction;
+    function := -1;
+    asm x86_64/macos { mov qword ptr ${function}, 0 }
+    if (function == 0) {
+        savedErrno := Errno();
+        name := CString("opendir$INODE64");
+        function = Dlsym(-2, name.data -> int);
+        if (function == 0) { SetErrno(78); return -1; }
+        SetErrno(savedErrno);
+    }
     asm x86_64/linux {
         mov rdi, ${a0}
         xor eax, eax
@@ -1112,15 +1298,14 @@ func Opendir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl opendir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1131,14 +1316,13 @@ func Opendir(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call opendir
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1152,26 +1336,29 @@ func Opendir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _opendir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
 
-readdirFunction := 0;
-readdirFunctionName := "readdir$INODE64\0";
-
 func Readdir(a0 int) int {
     result := -1;
-    if (readdirFunction == 0) { name := readdirFunctionName -> []i8; readdirFunction = Dlsym(-2, name.data -> int); }
-    function := readdirFunction;
+    function := -1;
+    asm x86_64/macos { mov qword ptr ${function}, 0 }
+    if (function == 0) {
+        savedErrno := Errno();
+        name := CString("readdir$INODE64");
+        function = Dlsym(-2, name.data -> int);
+        if (function == 0) { SetErrno(78); return -1; }
+        SetErrno(savedErrno);
+    }
     asm x86_64/linux {
         mov rdi, ${a0}
         xor eax, eax
@@ -1184,15 +1371,14 @@ func Readdir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl readdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1203,14 +1389,13 @@ func Readdir(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call readdir
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1224,15 +1409,14 @@ func Readdir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _readdir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -1251,15 +1435,14 @@ func Closedir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl closedir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1270,14 +1453,13 @@ func Closedir(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call closedir
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1291,26 +1473,29 @@ func Closedir(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _closedir
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
 
-realpathFunction := 0;
-realpathFunctionName := "realpath$DARWIN_EXTSN\0";
-
 func Realpath(a0 int, a1 int) int {
     result := -1;
-    if (realpathFunction == 0) { name := realpathFunctionName -> []i8; realpathFunction = Dlsym(-2, name.data -> int); }
-    function := realpathFunction;
+    function := -1;
+    asm x86_64/macos { mov qword ptr ${function}, 0 }
+    if (function == 0) {
+        savedErrno := Errno();
+        name := CString("realpath$DARWIN_EXTSN");
+        function = Dlsym(-2, name.data -> int);
+        if (function == 0) { SetErrno(78); return -1; }
+        SetErrno(savedErrno);
+    }
     asm x86_64/linux {
         mov rdi, ${a0}
         mov rsi, ${a1}
@@ -1325,15 +1510,14 @@ func Realpath(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl realpath
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1345,14 +1529,13 @@ func Realpath(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call realpath
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1368,15 +1551,14 @@ func Realpath(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _realpath
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -1399,15 +1581,14 @@ func Readlink(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl readlink
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1420,14 +1601,13 @@ func Readlink(a0 int, a1 int, a2 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call readlink
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1445,15 +1625,14 @@ func Readlink(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _readlink
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -1472,15 +1651,14 @@ func Mkdtemp(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl mkdtemp
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1491,14 +1669,13 @@ func Mkdtemp(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call mkdtemp
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1512,15 +1689,14 @@ func Mkdtemp(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _mkdtemp
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -1539,15 +1715,14 @@ func Mkstemp(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl mkstemp
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1558,14 +1733,13 @@ func Mkstemp(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call mkstemp
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1579,15 +1753,14 @@ func Mkstemp(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _mkstemp
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -1606,15 +1779,14 @@ func Close(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl close
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1625,14 +1797,13 @@ func Close(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call close
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1646,15 +1817,14 @@ func Close(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _close
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -1675,15 +1845,14 @@ func MacExecutablePath(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl __NSGetExecutablePath
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -1704,15 +1873,14 @@ func Dlsym(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _dlsym
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -1733,15 +1901,14 @@ func ClockGettime(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl clock_gettime
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1753,14 +1920,13 @@ func ClockGettime(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call clock_gettime
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1776,87 +1942,14 @@ func ClockGettime(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _clock_gettime
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
-    }
-    return (result -> i32) -> int;
-}
-
-func Nanosleep(a0 int, a1 int) int {
-    result := -1;
-    asm x86_64/linux {
-        mov rdi, ${a0}
-        mov rsi, ${a1}
-        xor eax, eax
-        call nanosleep
-        mov ${result}, rax
-    }
-    asm aarch64/linux {
-        ldr x0, ${a0}
-        ldr x1, ${a1}
-        sub sp, sp, #80
-        stp x9, x10, [sp, #16]
-        stp x11, x12, [sp, #32]
-        stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
-        bl nanosleep
-        mov x19, x0
-        ldp x9, x10, [sp, #16]
-        ldp x11, x12, [sp, #32]
-        ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
-        add sp, sp, #80
-        str x19, ${result}
-    }
-    asm riscv64/linux {
-        ld a0, ${a0}
-        ld a1, ${a1}
-        addi sp, sp, -48
-        sd ra, 0(sp)
-        sd t3, 8(sp)
-        sd t4, 16(sp)
-        sd t5, 24(sp)
-        sd t6, 32(sp)
-        call nanosleep
-        mv s1, a0
-        ld ra, 0(sp)
-        ld t3, 8(sp)
-        ld t4, 16(sp)
-        ld t5, 24(sp)
-        ld t6, 32(sp)
-        addi sp, sp, 48
-        sd s1, ${result}
-    }
-    asm x86_64/macos {
-        mov rdi, ${a0}
-        mov rsi, ${a1}
-        xor eax, eax
-        call _nanosleep
-        mov ${result}, rax
-    }
-    asm aarch64/macos {
-        ldr x0, ${a0}
-        ldr x1, ${a1}
-        sub sp, sp, #80
-        stp x9, x10, [sp, #16]
-        stp x11, x12, [sp, #32]
-        stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
-        bl _nanosleep
-        mov x19, x0
-        ldp x9, x10, [sp, #16]
-        ldp x11, x12, [sp, #32]
-        ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
-        add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -1875,15 +1968,14 @@ func Sigemptyset(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl sigemptyset
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1894,14 +1986,13 @@ func Sigemptyset(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call sigemptyset
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1915,15 +2006,14 @@ func Sigemptyset(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _sigemptyset
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -1944,15 +2034,14 @@ func Sigaddset(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl sigaddset
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -1964,14 +2053,13 @@ func Sigaddset(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call sigaddset
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -1987,15 +2075,14 @@ func Sigaddset(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _sigaddset
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2016,15 +2103,14 @@ func Sigismember(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl sigismember
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -2036,14 +2122,13 @@ func Sigismember(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call sigismember
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -2059,15 +2144,14 @@ func Sigismember(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _sigismember
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2090,15 +2174,14 @@ func PthreadSigmask(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl pthread_sigmask
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -2111,14 +2194,13 @@ func PthreadSigmask(a0 int, a1 int, a2 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call pthread_sigmask
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -2136,15 +2218,14 @@ func PthreadSigmask(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _pthread_sigmask
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2167,15 +2248,14 @@ func Sigtimedwait(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl sigtimedwait
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -2188,14 +2268,13 @@ func Sigtimedwait(a0 int, a1 int, a2 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call sigtimedwait
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2214,15 +2293,14 @@ func Sigpending(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl sigpending
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -2233,14 +2311,13 @@ func Sigpending(a0 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call sigpending
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -2254,15 +2331,14 @@ func Sigpending(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _sigpending
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2283,15 +2359,14 @@ func Sigwait(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl sigwait
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     asm riscv64/linux {
         ld a0, ${a0}
@@ -2303,14 +2378,13 @@ func Sigwait(a0 int, a1 int) int {
         sd t5, 24(sp)
         sd t6, 32(sp)
         call sigwait
-        mv s1, a0
         ld ra, 0(sp)
         ld t3, 8(sp)
         ld t4, 16(sp)
         ld t5, 24(sp)
         ld t6, 32(sp)
         addi sp, sp, 48
-        sd s1, ${result}
+        sd a0, ${result}
     }
     asm x86_64/macos {
         mov rdi, ${a0}
@@ -2326,15 +2400,66 @@ func Sigwait(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _sigwait
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
+    }
+    return (result -> i32) -> int;
+}
+
+func MacSignalTryLock(a0 int) int {
+    result := -1;
+    asm x86_64/macos {
+        mov rdi, ${a0}
+        xor eax, eax
+        call _os_unfair_lock_trylock
+        mov ${result}, rax
+    }
+    asm aarch64/macos {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl _os_unfair_lock_trylock
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return (result -> i32) -> int;
+}
+
+func MacSignalUnlock(a0 int) int {
+    result := -1;
+    asm x86_64/macos {
+        mov rdi, ${a0}
+        xor eax, eax
+        call _os_unfair_lock_unlock
+        mov ${result}, rax
+    }
+    asm aarch64/macos {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl _os_unfair_lock_unlock
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2345,6 +2470,7 @@ func WinGetLastError() int {
         sub rsp, 32
         call GetLastError
         add rsp, 32
+        mov eax, eax
         mov ${result}, rax
     }
     asm aarch64/windows {
@@ -2352,17 +2478,17 @@ func WinGetLastError() int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetLastError
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        mov w0, w0
+        str x0, ${result}
     }
-    return (result -> u32) -> int;
+    return result;
 }
 
 func WinSetLastError(a0 int) int {
@@ -2380,75 +2506,14 @@ func WinSetLastError(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl SetLastError
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
-    }
-    return (result -> i32) -> int;
-}
-
-func WinOpen(a0 int, a1 int, a2 int) int {
-    result := -1;
-    asm x86_64/windows {
-        mov rcx, ${a0}
-        mov rdx, ${a1}
-        mov r8, ${a2}
-        sub rsp, 32
-        call _wopen
-        add rsp, 32
-        mov ${result}, rax
-    }
-    asm aarch64/windows {
-        ldr x0, ${a0}
-        ldr x1, ${a1}
-        ldr x2, ${a2}
-        sub sp, sp, #80
-        stp x9, x10, [sp, #16]
-        stp x11, x12, [sp, #32]
-        stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
-        bl _wopen
-        mov x19, x0
-        ldp x9, x10, [sp, #16]
-        ldp x11, x12, [sp, #32]
-        ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
-        add sp, sp, #80
-        str x19, ${result}
-    }
-    return (result -> i32) -> int;
-}
-
-func WinCrtClose(a0 int) int {
-    result := -1;
-    asm x86_64/windows {
-        mov rcx, ${a0}
-        sub rsp, 32
-        call _close
-        add rsp, 32
-        mov ${result}, rax
-    }
-    asm aarch64/windows {
-        ldr x0, ${a0}
-        sub sp, sp, #80
-        stp x9, x10, [sp, #16]
-        stp x11, x12, [sp, #32]
-        stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
-        bl _close
-        mov x19, x0
-        ldp x9, x10, [sp, #16]
-        ldp x11, x12, [sp, #32]
-        ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
-        add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2462,6 +2527,7 @@ func WinGetEnvironmentVariable(a0 int, a1 int, a2 int) int {
         sub rsp, 32
         call GetEnvironmentVariableW
         add rsp, 32
+        mov eax, eax
         mov ${result}, rax
     }
     asm aarch64/windows {
@@ -2472,17 +2538,17 @@ func WinGetEnvironmentVariable(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetEnvironmentVariableW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        mov w0, w0
+        str x0, ${result}
     }
-    return (result -> u32) -> int;
+    return result;
 }
 
 func WinSetEnvironmentVariable(a0 int, a1 int) int {
@@ -2502,15 +2568,14 @@ func WinSetEnvironmentVariable(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl SetEnvironmentVariableW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2521,6 +2586,7 @@ func WinGetCurrentProcessId() int {
         sub rsp, 32
         call GetCurrentProcessId
         add rsp, 32
+        mov eax, eax
         mov ${result}, rax
     }
     asm aarch64/windows {
@@ -2528,17 +2594,17 @@ func WinGetCurrentProcessId() int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetCurrentProcessId
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        mov w0, w0
+        str x0, ${result}
     }
-    return (result -> u32) -> int;
+    return result;
 }
 
 func WinGetCurrentDirectory(a0 int, a1 int) int {
@@ -2549,6 +2615,7 @@ func WinGetCurrentDirectory(a0 int, a1 int) int {
         sub rsp, 32
         call GetCurrentDirectoryW
         add rsp, 32
+        mov eax, eax
         mov ${result}, rax
     }
     asm aarch64/windows {
@@ -2558,17 +2625,17 @@ func WinGetCurrentDirectory(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetCurrentDirectoryW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        mov w0, w0
+        str x0, ${result}
     }
-    return (result -> u32) -> int;
+    return result;
 }
 
 func WinSetCurrentDirectory(a0 int) int {
@@ -2586,15 +2653,14 @@ func WinSetCurrentDirectory(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl SetCurrentDirectoryW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2608,6 +2674,7 @@ func WinGetModuleFileName(a0 int, a1 int, a2 int) int {
         sub rsp, 32
         call GetModuleFileNameW
         add rsp, 32
+        mov eax, eax
         mov ${result}, rax
     }
     asm aarch64/windows {
@@ -2618,17 +2685,17 @@ func WinGetModuleFileName(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetModuleFileNameW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        mov w0, w0
+        str x0, ${result}
     }
-    return (result -> u32) -> int;
+    return result;
 }
 
 func WinFullPath(a0 int, a1 int, a2 int) int {
@@ -2650,15 +2717,14 @@ func WinFullPath(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _wfullpath
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }
@@ -2671,6 +2737,7 @@ func WinGetTempPath(a0 int, a1 int) int {
         sub rsp, 32
         call GetTempPathW
         add rsp, 32
+        mov eax, eax
         mov ${result}, rax
     }
     asm aarch64/windows {
@@ -2680,17 +2747,17 @@ func WinGetTempPath(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetTempPathW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        mov w0, w0
+        str x0, ${result}
     }
-    return (result -> u32) -> int;
+    return result;
 }
 
 func WinGetFileAttributes(a0 int) int {
@@ -2700,6 +2767,7 @@ func WinGetFileAttributes(a0 int) int {
         sub rsp, 32
         call GetFileAttributesW
         add rsp, 32
+        mov eax, eax
         mov ${result}, rax
     }
     asm aarch64/windows {
@@ -2708,17 +2776,17 @@ func WinGetFileAttributes(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetFileAttributesW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        mov w0, w0
+        str x0, ${result}
     }
-    return (result -> u32) -> int;
+    return result;
 }
 
 func WinCreateDirectory(a0 int, a1 int) int {
@@ -2738,15 +2806,14 @@ func WinCreateDirectory(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl CreateDirectoryW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2766,15 +2833,14 @@ func WinRemoveDirectory(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl RemoveDirectoryW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2794,15 +2860,14 @@ func WinDeleteFile(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl DeleteFileW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2826,103 +2891,14 @@ func WinMoveFileEx(a0 int, a1 int, a2 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl MoveFileExW
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
-    }
-    return (result -> i32) -> int;
-}
-
-func WinFindFirstFile(a0 int, a1 int) int {
-    result := -1;
-    asm x86_64/windows {
-        mov rcx, ${a0}
-        mov rdx, ${a1}
-        sub rsp, 32
-        call FindFirstFileW
-        add rsp, 32
-        mov ${result}, rax
-    }
-    asm aarch64/windows {
-        ldr x0, ${a0}
-        ldr x1, ${a1}
-        sub sp, sp, #80
-        stp x9, x10, [sp, #16]
-        stp x11, x12, [sp, #32]
-        stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
-        bl FindFirstFileW
-        mov x19, x0
-        ldp x9, x10, [sp, #16]
-        ldp x11, x12, [sp, #32]
-        ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
-        add sp, sp, #80
-        str x19, ${result}
-    }
-    return result;
-}
-
-func WinFindNextFile(a0 int, a1 int) int {
-    result := -1;
-    asm x86_64/windows {
-        mov rcx, ${a0}
-        mov rdx, ${a1}
-        sub rsp, 32
-        call FindNextFileW
-        add rsp, 32
-        mov ${result}, rax
-    }
-    asm aarch64/windows {
-        ldr x0, ${a0}
-        ldr x1, ${a1}
-        sub sp, sp, #80
-        stp x9, x10, [sp, #16]
-        stp x11, x12, [sp, #32]
-        stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
-        bl FindNextFileW
-        mov x19, x0
-        ldp x9, x10, [sp, #16]
-        ldp x11, x12, [sp, #32]
-        ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
-        add sp, sp, #80
-        str x19, ${result}
-    }
-    return (result -> i32) -> int;
-}
-
-func WinFindClose(a0 int) int {
-    result := -1;
-    asm x86_64/windows {
-        mov rcx, ${a0}
-        sub rsp, 32
-        call FindClose
-        add rsp, 32
-        mov ${result}, rax
-    }
-    asm aarch64/windows {
-        ldr x0, ${a0}
-        sub sp, sp, #80
-        stp x9, x10, [sp, #16]
-        stp x11, x12, [sp, #32]
-        stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
-        bl FindClose
-        mov x19, x0
-        ldp x9, x10, [sp, #16]
-        ldp x11, x12, [sp, #32]
-        ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
-        add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2944,15 +2920,14 @@ func WinStat(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _wstat64
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -2974,15 +2949,14 @@ func WinChmod(a0 int, a1 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl _wchmod
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
 }
@@ -3002,17 +2976,43 @@ func WinCloseHandle(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl CloseHandle
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return (result -> i32) -> int;
+}
+
+func WinLocalFree(a0 int) int {
+    result := -1;
+    asm x86_64/windows {
+        mov rcx, ${a0}
+        sub rsp, 32
+        call LocalFree
+        add rsp, 32
+        mov ${result}, rax
+    }
+    asm aarch64/windows {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl LocalFree
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return result;
 }
 
 func WinSystemTime(a0 int) int {
@@ -3030,15 +3030,14 @@ func WinSystemTime(a0 int) int {
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]
+        stp x15, x30, [sp, #64]
         bl GetSystemTimePreciseAsFileTime
-        mov x19, x0
         ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80
-        str x19, ${result}
+        str x0, ${result}
     }
     return result;
 }

@@ -27,6 +27,7 @@ func TestCaseMapping(t *testing.T) {
     if (unicode.ToUpper('a') != 'A' || unicode.ToUpper('é') != 'É' || unicode.ToUpper('σ') != 'Σ' || unicode.ToUpper('1') != '1') t.Error("ToUpper");
     if (unicode.ToLower('A') != 'a' || unicode.ToLower('Ā') != 'ā' || unicode.ToLower('ā') != 'ā' || unicode.ToLower('Ω') != 'ω') t.Error("ToLower");
     if (unicode.ToUpper('ß') != 'ß') t.Error("ToUpper has no one-to-one mapping for ß");
+    if (unicode.ToUpper(0x1F80) != 0x1F88) t.Error("ToUpper U+1F80");
     if (unicode.ToLower(304) != 'i') t.Error("ToLower U+0130");
     if (unicode.ToUpper(66560 + 40) != 66560) t.Error("ToUpper Deseret"); // U+10428 -> U+10400
 }

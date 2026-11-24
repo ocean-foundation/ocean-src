@@ -1,5 +1,8 @@
 package exec;
 
+import "sync";
+import "time";
+
 // This narrow ABI is implemented by the matching compiler's embedded native
 // process runtime. The public command API and all validation remain in Ocean.
 struct nativeCommand {
@@ -41,8 +44,18 @@ func copyCString(raw buffer<i8>) string {
 // Process is a command started with Start. Pid is its operating-system
 // process ID. After Wait (or a Poll that reports completion), ExitCode holds
 // the exit status, or -1 if the process was ended by a signal, whose number is
-// then in Signal (POSIX only).
-struct Process { Pid int; ExitCode int; Signal int; handle int; done bool; }
+// then in Signal (POSIX only). Copies share the native process and its result;
+// each copy's ExitCode and Signal are populated by its own Wait or Poll.
+struct Process { Pid int; ExitCode int; Signal int; state *processState; }
+
+struct processState {
+    mutex sync.Mutex;
+    handle int;
+    exitCode int;
+    signal int;
+    finished bool;
+    waitFailed bool;
+}
 
 func (c *Cmd) execute(capture bool, combined bool, start *Process) Result<string> {
     if (c.used) return Result<string>.error("exec: command already started");
@@ -88,7 +101,8 @@ func (c *Cmd) execute(capture bool, combined bool, start *Process) Result<string
         pid := -1;
         code := extern.ocean_process_start(&native, input.data, len(c.input), c.hasInput ? 1 : 0, &handle, &pid);
         if (code != 0) return Result<string>.error(copyCString(native.error));
-        start.handle = handle;
+        start.state = new(processState);
+        start.state.handle = handle;
         start.Pid = pid;
         start.ExitCode = -1;
         return Result<string>.value("");
@@ -119,17 +133,21 @@ func (c *Cmd) Start() Result<Process> {
     return Result<Process>.value(process);
 }
 
-func (p *Process) collect(block bool) Result<bool> {
-    if (p.done) return Result<bool>.value(true);
-    if (p.handle == 0) return Result<bool>.error("exec: process was not started");
-    exitCode := -1;
-    signal := 0;
-    state := extern.ocean_process_wait(p.handle, block ? 1 : 0, &exitCode, &signal);
-    if (state < 0) return Result<bool>.error("exec: wait failed");
-    if (state == 0) return Result<bool>.value(false);
-    p.done = true;
-    p.ExitCode = exitCode;
-    p.Signal = signal;
+func (p *Process) collect() Result<bool> {
+    state := p.state;
+    if (state == null || (state -> int) == 0) return Result<bool>.error("exec: process was not started");
+    state.mutex.Lock();
+    defer state.mutex.Unlock();
+    if (!state.finished) {
+        status := extern.ocean_process_wait(state.handle, 0, &state.exitCode, &state.signal);
+        if (status == 0) return Result<bool>.value(false);
+        state.finished = true;
+        state.waitFailed = status < 0;
+        state.handle = 0;
+    }
+    if (state.waitFailed) return Result<bool>.error("exec: wait failed");
+    p.ExitCode = state.exitCode;
+    p.Signal = state.signal;
     return Result<bool>.value(true);
 }
 
@@ -137,24 +155,32 @@ func (p *Process) collect(block bool) Result<bool> {
 // error if it failed (a nonzero exit or a signal), like Run. Waiting again
 // returns the same outcome.
 func (p *Process) Wait() Result<int> {
-    collected := p.collect(true);
-    if (collected.hasError()) return Result<int>.error(collected.error());
-    if (p.Signal != 0) return Result<int>.error("exec: process ended by signal " + decimal(p.Signal));
-    if (p.ExitCode != 0) return Result<int>.error("exec: process exited unsuccessfully");
+    for (;;) {
+        collected := p.collect();
+        if (collected.hasError()) return Result<int>.error(collected.error());
+        if (collected.unwrap()) break;
+        // Release the native-handle lock between polls so Kill can run.
+        time.Sleep(2 * time.Millisecond);
+    }
+    if (p.state.signal != 0) return Result<int>.error("exec: process ended by signal " + decimal(p.state.signal));
+    if (p.state.exitCode != 0) return Result<int>.error("exec: process exited unsuccessfully");
     return Result<int>.value(0);
 }
 
 // Poll reports whether the process has exited, without blocking. Once it
 // returns true, ExitCode and Signal are set and Wait returns immediately.
-func (p *Process) Poll() Result<bool> { return p.collect(false); }
+func (p *Process) Poll() Result<bool> { return p.collect(); }
 
 // Kill ends the process immediately (SIGKILL, or TerminateProcess on
 // Windows). Call Wait afterwards to release it. Killing a process that has
 // already been waited for is an error.
 func (p *Process) Kill() Result<bool> {
-    if (p.done) return Result<bool>.error("exec: process already finished");
-    if (p.handle == 0) return Result<bool>.error("exec: process was not started");
-    if (extern.ocean_process_kill(p.handle) != 0) return Result<bool>.error("exec: kill failed");
+    state := p.state;
+    if (state == null || (state -> int) == 0) return Result<bool>.error("exec: process was not started");
+    state.mutex.Lock();
+    defer state.mutex.Unlock();
+    if (state.finished) return Result<bool>.error("exec: process already finished");
+    if (extern.ocean_process_kill(state.handle) != 0) return Result<bool>.error("exec: kill failed");
     return Result<bool>.value(true);
 }
 

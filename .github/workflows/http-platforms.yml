@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
     inputs:
       compiler_ref:
-        description: 'Compiler revision with native platform support and libcurl auto-linking'
-        default: main
+        description: 'Compiler revision with the native process runtime and libcurl auto-linking'
+        default: 3ada4debdba59915150919b4108833ef07f48947
         required: true
 
 env:
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ocean-foundation/ocean-c
-          ref: ${{ inputs.compiler_ref || 'main' }}
+          ref: ${{ inputs.compiler_ref || '3ada4debdba59915150919b4108833ef07f48947' }}
           submodules: recursive
           path: ocean-c
       - uses: actions/setup-python@v5
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ocean-foundation/ocean-c
-          ref: ${{ inputs.compiler_ref || 'main' }}
+          ref: ${{ inputs.compiler_ref || '3ada4debdba59915150919b4108833ef07f48947' }}
           submodules: recursive
           path: ocean-c
       - uses: actions/setup-node@v4
@@ -152,7 +152,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ocean-foundation/ocean-c
-          ref: ${{ inputs.compiler_ref || 'main' }}
+          ref: ${{ inputs.compiler_ref || '3ada4debdba59915150919b4108833ef07f48947' }}
           submodules: recursive
           path: ocean-c
       - uses: docker/setup-qemu-action@v3

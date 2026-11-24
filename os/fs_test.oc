@@ -2,6 +2,7 @@ package os_test;
 
 import "os";
 import "os/exec";
+import "strings";
 import "testing";
 
 func scratch(t *testing.T) string {
@@ -23,6 +24,8 @@ func TestEnvironment(t *testing.T) {
     os.Unsetenv(name).unwrap();
     if (os.Getenv(name) != "") t.Error("Unsetenv");
     if (!os.Setenv("", "x").hasError() || !os.Setenv("A=B", "x").hasError()) t.Error("invalid names");
+    if (os.OS() == "windows" && (!os.Setenv("\xff", "x").hasError() || !os.Unsetenv("\xff").hasError()))
+        t.Error("invalid UTF-8 in Windows environment name");
     if (os.Getpid() <= 0) t.Error("Getpid");
 }
 
@@ -79,8 +82,26 @@ func TestPermissionsAndLinks(t *testing.T) {
     if (!os.Lstat(dir + "/link").unwrap().IsSymlink() || !os.Stat(dir + "/link").unwrap().IsDir()) t.Error("Lstat/Stat of a link");
     if (os.Realpath(dir + "/link/kept").unwrap() != os.Realpath(sub).unwrap() + "/kept") t.Error("Realpath through a link");
     // RemoveAll removes the link itself, not the directory it points to.
-    os.RemoveAll(dir + "/link").unwrap();
+    os.RemoveAll(dir + "/link///").unwrap();
     if (os.Lstat(dir + "/link").hasError() == false || !os.Exists(sub + "/kept")) t.Error("RemoveAll followed a link");
+}
+
+func TestRemoveAllDirectoryBoundary(t *testing.T) {
+    root := scratch(t);
+    target := root + "/target";
+    os.Mkdir(target).unwrap();
+    os.WriteFile(target + "/kept", "x").unwrap();
+    if (!os.RemoveAll(target + "/.//").hasError() || !os.Exists(target + "/kept"))
+        t.Fatal("RemoveAll must reject a final dot before deleting anything");
+    if (os.OS() != "windows") {
+        directory := root + "/slash\\";
+        os.Mkdir(directory).unwrap();
+        os.WriteFile(directory + "/child", "x").unwrap();
+        sibling := directory + "child";
+        os.WriteFile(sibling, "kept").unwrap();
+        os.RemoveAll(directory).unwrap();
+        if (os.Exists(directory) || !os.Exists(sibling)) t.Error("a POSIX backslash belongs to the directory name");
+    }
 }
 
 func TestWorkingDirectory(t *testing.T) {
@@ -91,6 +112,10 @@ func TestWorkingDirectory(t *testing.T) {
     if (os.Getwd().unwrap() != os.Realpath(dir).unwrap()) t.Errorf("Getwd = {}", os.Getwd().unwrap());
     os.WriteFile("relative.txt", "x").unwrap();
     if (!os.Exists(dir + "/relative.txt")) t.Error("relative path after Chdir");
+    if (os.OS() == "windows" && len(dir) >= 2 && dir[1] == ':') {
+        names := os.ListDir(dir[:2]).unwrap();
+        if (len(names) != 1 || names[0] != "relative.txt") t.Error("ListDir of a bare drive must use its current directory");
+    }
     if (!os.Chdir(dir + "/missing").hasError()) t.Error("Chdir missing");
     if (os.Realpath(".").unwrap() != os.Realpath(dir).unwrap()) t.Error("Realpath .");
     if (!os.Realpath(dir + "/missing").hasError()) t.Error("Realpath missing");
@@ -108,10 +133,33 @@ func TestProgramAndTemporaryFiles(t *testing.T) {
     other := os.CreateTemp("ocean-os-file-").unwrap();
     os.Remove(other).unwrap();
     if (other == path) t.Error("CreateTemp names should be unique");
+    if (os.OS() == "windows" && !os.CreateTemp("\xff").hasError()) t.Error("CreateTemp invalid UTF-8");
+}
+
+func TestWindowsTemporaryACL(t *testing.T) {
+    if (os.OS() != "windows") { t.Skip("Windows ACLs"); return; }
+    dir := scratch(t);
+    file := os.CreateTemp("ocean-os-acl-").unwrap();
+    t.Cleanup(func() { os.Remove(file).unwrap(); });
+    paths := "'" + strings.ReplaceAll(dir, "'", "''") + "', '" + strings.ReplaceAll(file, "'", "''") + "'";
+    script := "$ErrorActionPreference = 'Stop'\n" +
+        "$sidType = [System.Security.Principal.SecurityIdentifier]\n" +
+        "$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value\n" +
+        "foreach ($path in @(" + paths + ")) {\n" +
+        "  $acl = Get-Acl -LiteralPath $path\n" +
+        "  $rules = $acl.GetAccessRules($true, $true, $sidType)\n" +
+        "  if (!$acl.AreAccessRulesProtected -or $acl.GetOwner($sidType).Value -ne $user -or\n" +
+        "      $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $user -or\n" +
+        "      $rules[0].AccessControlType -ne 'Allow' -or $rules[0].FileSystemRights -ne 'FullControl') {\n" +
+        "    throw ('unexpected temporary ACL on ' + $path)\n" +
+        "  }\n" +
+        "}";
+    check := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script);
+    if (check.Run().hasError()) t.Error("temporary file and directory must grant full access only to the current user");
 }
 
 func TestInvalidPaths(t *testing.T) {
-    if (!os.Stat("").hasError() || !os.Mkdir("a\x00b").hasError() || !os.Remove("").hasError()) t.Error("empty and NUL paths");
+    if (!os.ListDir("").hasError() || !os.Stat("").hasError() || !os.Mkdir("a\x00b").hasError() || !os.Remove("").hasError()) t.Error("empty and NUL paths");
 }
 
 func TestPlatformHelpers(t *testing.T) {

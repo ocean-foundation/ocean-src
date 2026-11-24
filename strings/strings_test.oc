@@ -30,12 +30,17 @@ func TestSplit(t *testing.T) {
     if (!equalLists(strings.Split("", ","), []string{""})) t.Error("Split empty text");
     if (!equalLists(strings.Split("a--b--c", "--"), []string{"a", "b", "c"})) t.Error("Split multibyte sep");
     if (!equalLists(strings.Split("aé", ""), []string{"a", "é"})) t.Error("Split into characters");
+    if (!equalLists(strings.Split("", ""), []string{""}) || len(strings.SplitN("", "", 0)) != 0) t.Error("Split empty text and separator");
+    for (_, invalid := range []string{"\xe0\x9f\x80", "\xed\xa0\x80", "\xf0\x8f\x80\x80", "\xf4\x90\x80\x80"}) {
+        if (len(strings.Split(invalid, "")) != len(invalid)) t.Error("Split must consume invalid UTF-8 one byte at a time");
+    }
     if (!equalLists(strings.SplitN("a,b,c", ",", 2), []string{"a", "b,c"})) t.Error("SplitN");
     if (len(strings.SplitN("a,b", ",", 0)) != 0) t.Error("SplitN zero");
     if (!equalLists(strings.Fields("  one\ttwo \n three  "), []string{"one", "two", "three"})) t.Error("Fields");
     if (len(strings.Fields(" \t ")) != 0) t.Error("Fields blank");
     if (!equalLists(strings.Lines("a\r\nb\n\nc"), []string{"a", "b", "", "c"})) t.Error("Lines");
     if (!equalLists(strings.Lines("a\n"), []string{"a"})) t.Error("Lines final newline");
+    if (!equalLists(strings.Lines("a\r"), []string{"a\r"})) t.Error("Lines final carriage return");
     before, after, found := strings.Cut("key=value=x", "=");
     if (before != "key" || after != "value=x" || !found) t.Error("Cut");
     before, after, found = strings.Cut("plain", "=");

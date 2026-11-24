@@ -1,0 +1,255 @@
+package os;
+
+import "internal/native";
+import "sort";
+import "strings";
+
+func openWindowsFile(path int, access int, security int, disposition int, flags int) (int, u32) {
+    // FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE.
+    return windowsCallArgs(windowsKernelSymbol("CreateFileW"), [7]int{path, access, 7, security, disposition, flags, 0});
+}
+
+func windowsFileError(operation string, path string, code u32) string {
+    return operationError(operation, path, windowsErrorText(code -> int));
+}
+
+func windowsLstat(path string, data *[]i8) Result<FileInfo> {
+    // FILE_READ_ATTRIBUTES, OPEN_EXISTING, BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
+    handle, code := openWindowsFile(native.Address(data), 0x80, 0, 3, 0x02200000);
+    if (handle == -1 || handle == 0) return Result<FileInfo>.error(windowsFileError("lstat", path, code));
+    defer native.WinCloseHandle(handle);
+
+    query := windowsKernelSymbol("GetFileInformationByHandleEx");
+    tag := [2]u32{};
+    ok := 0;
+    ok, code = windowsCallWithError(query, handle, 9, tag.data -> int, sizeof(tag)); // FileAttributeTagInfo
+    if ((ok -> i32) == 0) return Result<FileInfo>.error(windowsFileError("lstat", path, code));
+
+    basic := [5]int{};
+    ok, code = windowsCallWithError(query, handle, 0, basic.data -> int, sizeof(basic)); // FileBasicInfo
+    if ((ok -> i32) == 0) return Result<FileInfo>.error(windowsFileError("lstat", path, code));
+    standard := [3]int{};
+    ok, code = windowsCallWithError(query, handle, 1, standard.data -> int, sizeof(standard)); // FileStandardInfo
+    if ((ok -> i32) == 0) return Result<FileInfo>.error(windowsFileError("lstat", path, code));
+
+    mode := (tag[0] & 1) != 0 ? 0x124 : 0x1b6; // 0444 or 0666
+    name := lastElement(path);
+    kind := ModeRegular;
+    if ((tag[0] & 16) != 0) { kind = ModeDir; mode = mode | 0x49; }
+    else if (len(name) >= 4) {
+        suffix := strings.ToLower(name[len(name) - 4:]);
+        if (suffix == ".exe" || suffix == ".com" || suffix == ".bat" || suffix == ".cmd") mode = mode | 0x49;
+    }
+    if (tag[1] == 0xa000000c) kind = ModeSymlink; // IO_REPARSE_TAG_SYMLINK
+    seconds := (basic[2] - 116444736000000000) / 10000000;
+    return Result<FileInfo>.value(FileInfo{Name: name, Size: standard[1], Mode: mode | kind, ModTime: seconds * 1000000000});
+}
+
+// Keep the original UTF-16 spelling so deletion can address every name that
+// Windows returns, including names with unpaired surrogates.
+func windowsDirectoryEntries(handle int, path string) Result<[][]i8> {
+    entries := make([][]i8);
+    query := windowsKernelSymbol("GetFileInformationByHandleEx");
+    data := native.Zeroed(16384);
+    base := native.Address(&data);
+    for (;;) {
+        ok, code := windowsCallWithError(query, handle, 14, base, len(data)); // FileFullDirectoryInfo
+        if ((ok -> i32) == 0) {
+            if (code == 18) return Result<[][]i8>.value(entries); // ERROR_NO_MORE_FILES
+            return Result<[][]i8>.error(windowsFileError("readdir", path, code));
+        }
+        for (offset := 0;;) {
+            entry := base + offset;
+            count := native.ReadU32(entry + 60);
+            name := entry + 68;
+            dot := (count == 2 || count == 4) && native.ReadU16(name) == '.';
+            if (!dot || (count == 4 && native.ReadU16(name + 2) != '.')) {
+                bytes := (name -> buffer<i8>);
+                copy := make([]i8);
+                for (i := 0; i < count; i++) copy.append(bytes[i]);
+                entries.append(copy);
+            }
+            next := native.ReadU32(entry);
+            if (next == 0) break;
+            offset += next;
+        }
+    }
+    return Result<[][]i8>.value(entries);
+}
+
+func listWindowsDirectory(path string) Result<[]string> {
+    if (path == "") return Result<[]string>.error("os: open: empty path");
+    directory := path;
+    if (len(directory) == 2 && directory[1] == ':') directory += ".";
+    argument := wideArgument("open", directory);
+    if (argument.hasError()) return Result<[]string>.error(argument.error());
+    data := argument.unwrap();
+    // FILE_LIST_DIRECTORY, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS.
+    handle, code := openWindowsFile(native.Address(&data), 1, 0, 3, 0x02000000);
+    if (handle == -1 || handle == 0) return Result<[]string>.error(windowsFileError("open", path, code));
+    defer native.WinCloseHandle(handle);
+    entries := windowsDirectoryEntries(handle, path);
+    if (entries.hasError()) return Result<[]string>.error(entries.error());
+    names := make([]string);
+    for (_, name := range entries.unwrap()) names.append(native.FromWide(native.Address(&name), len(name) / 2));
+    sort.Strings(&names);
+    return Result<[]string>.value(names);
+}
+
+func windowsRemoveRootOrDot(path string, leaf string) bool {
+    if (windowsUNCShareRoot(path)) return true;
+    // A DOS device path with only its device name can denote a volume root.
+    if (len(path) >= 4 && windowsPathSeparator(path[0]) && windowsPathSeparator(path[1]) &&
+        (path[2] == '?' || path[2] == '.') && windowsPathSeparator(path[3])) {
+        return path[4:] == leaf;
+    }
+    // Win32 normalizes ordinary paths with trailing spaces and dots.
+    for (i := 0; i < len(leaf); i++) {
+        if (leaf[i] != ' ' && leaf[i] != '.') return false;
+    }
+    return true;
+}
+
+func windowsRemoveStatus(path string, code u32) Result<bool> {
+    if (code == 2 || code == 3) return Result<bool>.value(true); // FILE_NOT_FOUND, PATH_NOT_FOUND
+    return Result<bool>.error(windowsFileError("remove", path, code));
+}
+
+func removeAllWindows(path string) Result<bool> {
+    argument := wideArgument("remove", path);
+    if (argument.hasError()) return Result<bool>.error(argument.error());
+    data := argument.unwrap();
+    // DELETE | FILE_READ_ATTRIBUTES, OPEN_EXISTING, BACKUP_SEMANTICS | OPEN_REPARSE_POINT.
+    handle, code := openWindowsFile(native.Address(&data), 0x10080, 0, 3, 0x02200000);
+    if (handle == -1 || handle == 0) return windowsRemoveStatus(path, code);
+    defer native.WinCloseHandle(handle);
+    ntdll := windowsModule("ntdll.dll", false);
+    open := windowsSymbol(ntdll, "NtOpenFile");
+    translate := windowsSymbol(ntdll, "RtlNtStatusToDosError");
+    if (open == 0 || translate == 0) return windowsRemoveStatus(path, 127);
+    return removeWindowsHandle(handle, path, open, translate);
+}
+
+func openWindowsChild(parent int, name *[]i8, open int, translate int) (int, u32) {
+    // UNICODE_STRING and OBJECT_ATTRIBUTES on 64-bit Windows. RootDirectory
+    // binds this single entry name to the already opened directory.
+    length := len(*name) -> u16;
+    unicodeName := [2]int{(length -> int) | ((length -> int) << 16), native.Address(name)};
+    attributes := [6]int{48, parent, unicodeName.data -> int, 0, 0, 0};
+    statusBlock := [2]int{};
+    handle := 0;
+    // DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE, share all,
+    // FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT.
+    status, _ := windowsCallArgs(open, [7]int{(&handle) -> int, 0x110080, attributes.data -> int, statusBlock.data -> int, 7, 0x200020, 0});
+    if ((status -> i32) < 0) return 0, windowsCall(translate, status, 0, 0, 0) -> u32;
+    return handle, 0;
+}
+
+func removeWindowsHandle(handle int, path string, open int, translate int) Result<bool> {
+    query := windowsKernelSymbol("GetFileInformationByHandleEx");
+    tag := [2]u32{};
+    ok, code := windowsCallWithError(query, handle, 9, tag.data -> int, sizeof(tag)); // FileAttributeTagInfo
+    if ((ok -> i32) == 0) return windowsRemoveStatus(path, code);
+    // Reparse points are leaves even when they advertise the directory bit.
+    if ((tag[0] & 0x410) == 0x10) {
+        removed := removeWindowsChildren(handle, path, open, translate);
+        if (removed.hasError()) return removed;
+    }
+    // FileDispositionInfo marks the same opened object for deletion on close.
+    disposition: u8 = 1;
+    ok, code = windowsCallWithError(windowsKernelSymbol("SetFileInformationByHandle"), handle, 4, (&disposition) -> int, 1);
+    if ((ok -> i32) == 0) return windowsRemoveStatus(path, code);
+    return Result<bool>.value(true);
+}
+
+func removeWindowsChildren(handle int, path string, open int, translate int) Result<bool> {
+    // Reopen the same directory with FILE_LIST_DIRECTORY access for enumeration.
+    directory, code := windowsCallWithError(windowsKernelSymbol("ReOpenFile"), handle, 1, 7, 0x02200000);
+    if (directory == -1 || directory == 0) return windowsRemoveStatus(path, code);
+    names := windowsDirectoryEntries(directory, path);
+    native.WinCloseHandle(directory);
+    if (names.hasError()) return Result<bool>.error(names.error());
+    for (_, name := range names.unwrap()) {
+        childPath := path + "\\" + native.FromWide(native.Address(&name), len(name) / 2);
+        child := 0;
+        child, code = openWindowsChild(handle, &name, open, translate);
+        if (child == 0) {
+            missing := windowsRemoveStatus(childPath, code);
+            if (missing.hasError()) return missing;
+            continue;
+        }
+        removed := removeWindowsHandle(child, childPath, open, translate);
+        native.WinCloseHandle(child);
+        if (removed.hasError()) return removed;
+    }
+    return Result<bool>.value(true);
+}
+
+func windowsTempSecurity(advapi int, directory bool) Result<int> {
+    token := 0;
+    ok, code := windowsCallWithError(windowsSymbol(advapi, "OpenProcessToken"), -1, 8, (&token) -> int, 0); // TOKEN_QUERY
+    if ((ok -> i32) == 0) return Result<int>.error(windowsErrorText(code -> int));
+    defer native.WinCloseHandle(token);
+    // TOKEN_USER contains a pointer to the user SID followed by its attributes.
+    data := native.Zeroed(128);
+    size: u32 = 0;
+    base := native.Address(&data);
+    query := windowsSymbol(advapi, "GetTokenInformation");
+    ok, code = windowsCallArgs(query, [7]int{token, 1, base, len(data), (&size) -> int, 0, 0}); // TokenUser
+    if ((ok -> i32) == 0) return Result<int>.error(windowsErrorText(code -> int));
+    sid := 0;
+    ok, code = windowsCallWithError(windowsSymbol(advapi, "ConvertSidToStringSidW"), native.ReadI64(base), (&sid) -> int, 0, 0);
+    if ((ok -> i32) == 0) return Result<int>.error(windowsErrorText(code -> int));
+    defer native.WinLocalFree(sid);
+    user := native.FromWide(sid, -1);
+    flags := directory ? "OICI" : "";
+    // Set the owner explicitly, disable parent ACL inheritance, and grant
+    // full access only to the user SID.
+    descriptor := native.Wide("O:" + user + "D:P(A;" + flags + ";FA;;;" + user + ")").unwrap();
+    security := 0;
+    convert := windowsSymbol(advapi, "ConvertStringSecurityDescriptorToSecurityDescriptorW");
+    ok, code = windowsCallWithError(convert, native.Address(&descriptor), 1, (&security) -> int, 0);
+    if ((ok -> i32) == 0) return Result<int>.error(windowsErrorText(code -> int));
+    return Result<int>.value(security);
+}
+
+func windowsCreateTemp(prefix string, directory bool) Result<string> {
+    operation := directory ? "mkdirtemp" : "createtemp";
+    parent := TempDir();
+    advapi := windowsModule("advapi32.dll", true);
+    if (advapi == 0) return Result<string>.error(windowsFileError(operation, parent, 127));
+    defer windowsCall(windowsKernelSymbol("FreeLibrary"), advapi, 0, 0, 0);
+    security := windowsTempSecurity(advapi, directory);
+    if (security.hasError()) return Result<string>.error(operationError(operation, parent, security.error()));
+    descriptor := security.unwrap();
+    defer native.WinLocalFree(descriptor);
+    // SECURITY_ATTRIBUTES: length, security descriptor, inherit handle.
+    attributes := [3]int{24, descriptor, 0};
+    random := windowsSymbol(advapi, "SystemFunction036"); // RtlGenRandom
+    candidate := "";
+    code: u32 = 0;
+    ok := 0;
+    handle := 0;
+    for (attempt := 0; attempt < 100; attempt++) {
+        nonce: u64 = 0;
+        if ((windowsCall(random, (&nonce) -> int, sizeof(nonce), 0, 0) -> u8) == 0)
+            return Result<string>.error(operationError(operation, parent, "could not generate a temporary name"));
+        candidate = parent + "\\" + prefix + decimal((nonce & 0x7fffffffffffffff) -> int);
+        argument := wideArgument(operation, candidate);
+        if (argument.hasError()) return Result<string>.error(argument.error());
+        data := argument.unwrap();
+        if (directory) {
+            ok, code = windowsCallWithError(windowsKernelSymbol("CreateDirectoryW"), native.Address(&data), attributes.data -> int, 0, 0);
+            if ((ok -> i32) != 0) return Result<string>.value(candidate);
+        } else {
+            // CREATE_NEW provides exclusive creation.
+            handle, code = openWindowsFile(native.Address(&data), 0x40000000, attributes.data -> int, 1, 0x80);
+            if (handle != -1 && handle != 0) {
+                native.WinCloseHandle(handle);
+                return Result<string>.value(candidate);
+            }
+        }
+        if (code != 80 && code != 183) break; // FILE_EXISTS, ALREADY_EXISTS
+    }
+    return Result<string>.error(windowsFileError(operation, candidate, code));
+}

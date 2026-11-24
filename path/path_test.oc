@@ -30,6 +30,10 @@ func TestCleanWindows(t *testing.T) {
 
 func TestElements(t *testing.T) {
     if (Join("a", "b", "../c") != "a/c" || Join("", "") != "" || Join("/", "x") != "/x" || Join("a", "", "b") != "a/b") t.Error("Join");
+    if (join([]string{"/", "logs/app"}, true) != "/logs/app" ||
+        join([]string{"//logs", "app"}, true) != "/logs/app" ||
+        join([]string{"C:", "logs"}, true) != "C:logs" ||
+        join([]string{"//server/share/", "logs"}, true) != "//server/share/logs") t.Error("Windows Join roots");
     if (base("a/b/", false) != "b" || base("", false) != "." || base("/", false) != "/" || base("file.oc", false) != "file.oc") t.Error("base");
     if (base("C:\\dir\\f.txt", true) != "f.txt") t.Error("base windows");
     if (dir("a/b", false) != "a" || dir("a", false) != "." || dir("/a", false) != "/" || dir("/", false) != "/") t.Error("dir");
@@ -49,6 +53,8 @@ func TestRel(t *testing.T) {
     if (!rel("/a", "b", false).hasError()) t.Error("rel mixed");
     if (!rel("../a", "b", false).hasError()) t.Error("rel unknowable");
     if (rel("C:\\Users\\Me", "c:/users/me/docs", true).unwrap() != "docs") t.Error("rel windows case");
+    if (!rel("/a", "b", true).hasError() || rel("/a", "/b", true).unwrap() != "../b" ||
+        join([]string{"C:", rel("C:", "C:logs", true).unwrap()}, true) != "C:logs") t.Error("rel Windows rootedness");
     if (!rel("C:/a", "D:/a", true).hasError()) t.Error("rel windows volumes");
 }
 
@@ -57,4 +63,10 @@ func TestAbs(t *testing.T) {
     if (Abs("x/../y").unwrap() != Join(cwd, "y")) t.Error("Abs relative");
     if (!onWindows() && Abs("/a/./b").unwrap() != "/a/b") t.Error("Abs absolute");
     if (!IsAbs(Abs("z").unwrap())) t.Error("Abs result");
+    if (onWindows()) {
+        cwd = ToSlash(cwd);
+        v := volume(cwd, true);
+        if (Abs("/logs").unwrap() != cwd[:v] + "/logs") t.Error("Abs current volume root");
+        if (v == 2 && Abs(cwd[:v] + "logs").unwrap() != Join(cwd, "logs")) t.Error("Abs current drive directory");
+    }
 }

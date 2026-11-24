@@ -22,12 +22,21 @@ def main():
         env = dict(os.environ, OCEAN_SRC=str(ROOT))
         subprocess.run([compiler, "build", str(Path(__file__).parent), "-o", executable], env=env, check=True)
         child = subprocess.Popen([executable], stdout=subprocess.PIPE, text=True)
-        assert child.stdout.readline().strip() == "ready"
-        child.send_signal(signal.SIGTERM)
-        assert child.stdout.readline().strip() == "SIGTERM"
-        child.send_signal(signal.SIGINT)
-        assert child.stdout.readline().strip() == "SIGINT"
-        assert child.wait(timeout=10) == 0, "blocked signals should not end the process"
+        try:
+            assert child.stdout.readline().strip() == "ready"
+            child.send_signal(signal.SIGTERM)
+            assert child.stdout.readline().strip() == "SIGTERM"
+            child.send_signal(signal.SIGINT)
+            assert child.stdout.readline().strip() == "SIGINT"
+            assert child.stdout.readline().strip() == "concurrent ready"
+            child.send_signal(signal.SIGTERM)
+            remaining, _ = child.communicate(timeout=10)
+            assert remaining.strip() == "concurrent wait finished", remaining
+            assert child.returncode == 0, "blocked signals should not end the process"
+        finally:
+            if child.poll() is None:
+                child.kill()
+                child.wait()
     print("ok")
 
 

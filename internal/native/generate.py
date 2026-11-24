@@ -33,6 +33,9 @@ BRIDGES = {
     "Stat": (2, "i32", {"linux": "stat", "macos": "stat", "macos-x86_64": "stat$INODE64"}),
     "Lstat": (2, "i32", {"linux": "lstat", "macos": "lstat", "macos-x86_64": "lstat$INODE64"}),
     "Mkdir": (2, "i32", {"posix": "mkdir"}),
+    "Openat": (3, "i32", {"posix": "openat"}),
+    "Unlinkat": (3, "i32", {"posix": "unlinkat"}),
+    "Fdopendir": (1, "i64", {"posix": "fdopendir", "macos-x86_64": "fdopendir$INODE64"}),
     "Rmdir": (1, "i32", {"posix": "rmdir"}),
     "Unlink": (1, "i32", {"posix": "unlink"}),
     "Rename": (2, "i32", {"posix": "rename"}),
@@ -49,7 +52,6 @@ BRIDGES = {
     "Dlsym": (2, "i64", {"macos": "dlsym"}),
     # clocks
     "ClockGettime": (2, "i32", {"posix": "clock_gettime"}),
-    "Nanosleep": (2, "i32", {"posix": "nanosleep"}),
     # signals
     "Sigemptyset": (1, "i32", {"posix": "sigemptyset"}),
     "Sigaddset": (2, "i32", {"posix": "sigaddset"}),
@@ -58,11 +60,11 @@ BRIDGES = {
     "Sigtimedwait": (3, "i32", {"linux": "sigtimedwait"}),
     "Sigpending": (1, "i32", {"posix": "sigpending"}),
     "Sigwait": (2, "i32", {"posix": "sigwait"}),
+    "MacSignalTryLock": (1, "i32", {"macos": "os_unfair_lock_trylock"}),
+    "MacSignalUnlock": (1, "i32", {"macos": "os_unfair_lock_unlock"}),
     # Windows (UTF-16 paths and strings)
     "WinGetLastError": (0, "u32", {"windows": "GetLastError"}),
     "WinSetLastError": (1, "i32", {"windows": "SetLastError"}),
-    "WinOpen": (3, "i32", {"windows": "_wopen"}),
-    "WinCrtClose": (1, "i32", {"windows": "_close"}),
     "WinGetEnvironmentVariable": (3, "u32", {"windows": "GetEnvironmentVariableW"}),
     "WinSetEnvironmentVariable": (2, "i32", {"windows": "SetEnvironmentVariableW"}),
     "WinGetCurrentProcessId": (0, "u32", {"windows": "GetCurrentProcessId"}),
@@ -76,12 +78,10 @@ BRIDGES = {
     "WinRemoveDirectory": (1, "i32", {"windows": "RemoveDirectoryW"}),
     "WinDeleteFile": (1, "i32", {"windows": "DeleteFileW"}),
     "WinMoveFileEx": (3, "i32", {"windows": "MoveFileExW"}),
-    "WinFindFirstFile": (2, "i64", {"windows": "FindFirstFileW"}),
-    "WinFindNextFile": (2, "i32", {"windows": "FindNextFileW"}),
-    "WinFindClose": (1, "i32", {"windows": "FindClose"}),
     "WinStat": (2, "i32", {"windows": "_wstat64"}),
     "WinChmod": (2, "i32", {"windows": "_wchmod"}),
     "WinCloseHandle": (1, "i32", {"windows": "CloseHandle"}),
+    "WinLocalFree": (1, "i64", {"windows": "LocalFree"}),
     "WinSystemTime": (1, "i64", {"windows": "GetSystemTimePreciseAsFileTime"}),
 }
 
@@ -93,11 +93,11 @@ AARCH64_SAVE = """        sub sp, sp, #80
         stp x9, x10, [sp, #16]
         stp x11, x12, [sp, #32]
         stp x13, x14, [sp, #48]
-        str x15, [sp, #64]"""
+        stp x15, x30, [sp, #64]"""
 AARCH64_RESTORE = """        ldp x9, x10, [sp, #16]
         ldp x11, x12, [sp, #32]
         ldp x13, x14, [sp, #48]
-        ldr x15, [sp, #64]
+        ldp x15, x30, [sp, #64]
         add sp, sp, #80"""
 RISCV_SAVE = """        addi sp, sp, -48
         sd ra, 0(sp)
@@ -117,7 +117,7 @@ def quote(symbol):
     return f'"{symbol}"' if "$" in symbol else symbol
 
 
-def x86_sysv(n, symbol):
+def x86_sysv(n, symbol, kind):
     lines = [f"        mov {X86_SYSV[i]}, ${{a{i}}}" for i in range(n)]
     # LLVM's Intel-dialect inline assembly drops '$' from symbol names, so such
     # functions are resolved once with dlsym and called through a pointer.
@@ -126,21 +126,27 @@ def x86_sysv(n, symbol):
     return "\n".join(lines)
 
 
-def x86_win(n, symbol):
+def x86_win(n, symbol, kind):
     lines = [f"        mov {X86_WIN[i]}, ${{a{i}}}" for i in range(n)]
-    lines += ["        sub rsp, 32", f"        call {symbol}", "        add rsp, 32", "        mov ${result}, rax"]
+    lines += ["        sub rsp, 32", f"        call {symbol}", "        add rsp, 32"]
+    if kind == "u32":
+        lines.append("        mov eax, eax")
+    lines.append("        mov ${result}, rax")
     return "\n".join(lines)
 
 
-def aarch64(n, symbol):
+def aarch64(n, symbol, kind):
     lines = [f"        ldr x{i}, ${{a{i}}}" for i in range(n)]
-    lines += [AARCH64_SAVE, f"        bl {quote(symbol)}", "        mov x19, x0", AARCH64_RESTORE, "        str x19, ${result}"]
+    lines += [AARCH64_SAVE, f"        bl {quote(symbol)}", AARCH64_RESTORE]
+    if kind == "u32":
+        lines.append("        mov w0, w0")
+    lines.append("        str x0, ${result}")
     return "\n".join(lines)
 
 
-def riscv(n, symbol):
+def riscv(n, symbol, kind):
     lines = [f"        ld {RISCV[i]}, ${{a{i}}}" for i in range(n)]
-    lines += [RISCV_SAVE, f"        call {symbol}", "        mv s1, a0", RISCV_RESTORE, "        sd s1, ${result}"]
+    lines += [RISCV_SAVE, f"        call {symbol}", RISCV_RESTORE, "        sd a0, ${result}"]
     return "\n".join(lines)
 
 
@@ -157,16 +163,18 @@ def symbol_for(symbols, platform, arch):
 
 def bridge(name, n, kind, symbols):
     params = ", ".join(f"a{i} int" for i in range(n))
-    out = []
+    out = [f"func {name}({params}) int {{", "    result := -1;"]
     indirect = [s for s in symbols.values() if "$" in s]
     if indirect:
-        # Only x86-64 macOS uses these names; dlsym returns -1 on other targets.
-        cache = name[0].lower() + name[1:] + "Function"
-        out += [f"{cache} := 0;", f"{cache}Name := \"{indirect[0]}\\0\";", ""]
-    out += [f"func {name}({params}) int {{", "    result := -1;"]
-    if indirect:
-        out += [f"    if ({cache} == 0) {{ name := {cache}Name -> []i8; {cache} = Dlsym(-2, name.data -> int); }}",
-                f"    function := {cache};"]
+        out += ["    function := -1;",
+                "    asm x86_64/macos { mov qword ptr ${function}, 0 }",
+                "    if (function == 0) {",
+                "        savedErrno := Errno();",
+                f'        name := CString("{indirect[0]}");',
+                "        function = Dlsym(-2, name.data -> int);",
+                "        if (function == 0) { SetErrno(78); return -1; }", # ENOSYS on Darwin
+                "        SetErrno(savedErrno);",
+                "    }"]
     targets = [("x86_64", "linux", x86_sysv), ("aarch64", "linux", aarch64), ("riscv64", "linux", riscv),
                ("x86_64", "macos", x86_sysv), ("aarch64", "macos", aarch64),
                ("x86_64", "windows", x86_win), ("aarch64", "windows", aarch64)]
@@ -179,12 +187,10 @@ def bridge(name, n, kind, symbols):
         if n > 3:
             raise SystemExit(f"{name}: asm blocks allow four operands, so bridges take at most three arguments")
         out.append(f"    asm {arch}/{platform} {{")
-        out.append(emit(n, symbol))
+        out.append(emit(n, symbol, kind))
         out.append("    }")
     if kind == "i32":
         out.append("    return (result -> i32) -> int;")
-    elif kind == "u32":
-        out.append("    return (result -> u32) -> int;")
     else:
         out.append("    return result;")
     out.append("}")

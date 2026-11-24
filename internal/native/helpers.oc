@@ -39,6 +39,12 @@ func Errno() int {
     return ReadI32(location);
 }
 
+// SetErrno sets the calling thread's C errno value, when available.
+func SetErrno(code int) {
+    location := ErrnoLocation();
+    if (location != 0 && location != -1) *(location -> (*i32)) = code -> i32;
+}
+
 // ErrorText describes a C errno value, for example "No such file or directory".
 func ErrorText(code int) string {
     text := Strerror(code);

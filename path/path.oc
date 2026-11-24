@@ -1,6 +1,7 @@
 package path;
 
 import "os";
+import "internal/native";
 
 // Lexical manipulation of file-system paths for the target platform. Results
 // use '/' as the separator on every platform. On Windows '\\' is accepted as
@@ -84,8 +85,22 @@ func join(parts []string, windows bool) string {
     out := "";
     for (_, part := range parts) {
         if (part == "") continue;
-        if (out == "") { out = part; continue; }
-        out = out + "/" + part;
+        if (out == "") {
+            out = toSlash(part, windows);
+            // An incomplete UNC path is rooted on the current volume.
+            if (windows && len(out) >= 2 && out[:2] == "//" && volume(out, true) == 0) {
+                start := 1;
+                for (start < len(out) && out[start] == '/') start++;
+                out = out[start - 1:];
+            }
+            continue;
+        }
+        if (isSep(out[len(out) - 1], windows)) {
+            start := 0;
+            for (start < len(part) && isSep(part[start], windows)) start++;
+            out = out + part[start:];
+        } else if (windows && len(out) == 2 && volume(out, true) == 2) out = out + part;
+        else out = out + "/" + part;
     }
     if (out == "") return "";
     return clean(out, windows);
@@ -146,12 +161,14 @@ func sameVolume(a string, b string, windows bool) bool {
 func rel(basePath string, target string, windows bool) Result<string> {
     b := clean(basePath, windows);
     t := clean(target, windows);
-    if (isAbs(b, windows) != isAbs(t, windows)) return Result<string>.error("path: cannot make " + target + " relative to " + basePath);
     bv := volume(b, windows);
     tv := volume(t, windows);
+    br := rootLength(b, windows);
+    tr := rootLength(t, windows);
+    if ((br > bv) != (tr > tv)) return Result<string>.error("path: cannot make " + target + " relative to " + basePath);
     if (!sameVolume(b[:bv], t[:tv], windows)) return Result<string>.error("path: " + target + " and " + basePath + " are on different volumes");
-    bp := splitParts(b, rootLength(b, windows));
-    tp := splitParts(t, rootLength(t, windows));
+    bp := splitParts(b, br);
+    tp := splitParts(t, tr);
     common := 0;
     for (common < len(bp) && common < len(tp) && (windows ? sameVolume(bp[common], tp[common], true) : bp[common] == tp[common])) common++;
     for (i := common; i < len(bp); i++) {
@@ -222,10 +239,26 @@ func Rel(basePath string, target string) Result<string> { return rel(basePath, t
 // the current working directory. It does not resolve symbolic links; use
 // os.Realpath for that.
 func Abs(path string) Result<string> {
-    if (IsAbs(path)) return Result<string>.value(Clean(path));
+    windows := onWindows();
+    if (isAbs(path, windows)) return Result<string>.value(clean(path, windows));
+    if (windows && volume(path, true) == 2) {
+        if (native.HasNUL(path)) return Result<string>.error("path: path contains NUL");
+        converted := native.Wide(path);
+        if (converted.hasError()) return Result<string>.error("path: " + converted.error());
+        wide := converted.unwrap();
+        buffer := native.Zeroed(65536);
+        resolved := native.WinFullPath(native.Address(&buffer), native.Address(&wide), 32768);
+        if (resolved == 0 || resolved == -1) return Result<string>.error("path: " + native.LastError());
+        return Result<string>.value(clean(native.FromWide(resolved, -1), true));
+    }
     cwd := os.Getwd();
     if (cwd.hasError()) return Result<string>.error(cwd.error());
-    return Result<string>.value(Join(cwd.unwrap(), path));
+    directory := cwd.unwrap();
+    if (windows && len(path) != 0 && isSep(path[0], true)) {
+        directory = toSlash(directory, true);
+        return Result<string>.value(clean(directory[:volume(directory, true)] + path, true));
+    }
+    return Result<string>.value(join([]string{directory, path}, windows));
 }
 
 func onWindows() bool { return os.OS() == "windows"; }

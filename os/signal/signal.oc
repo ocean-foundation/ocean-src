@@ -2,6 +2,7 @@ package signal;
 
 import "internal/native";
 import "os";
+import "time";
 
 // Deferred handling of termination signals on Linux and macOS. Block holds
 // back SIGINT, SIGTERM and SIGHUP so they no longer stop the program; Pending
@@ -40,6 +41,8 @@ func Block() Result<bool> { return mask((os.OS() == "macos") ? 1 : 0); }
 // signal still pending then takes effect immediately (usually ending the program).
 func Unblock() Result<bool> { return mask((os.OS() == "macos") ? 2 : 1); }
 
+macSignalLock: i32 = 0;
+
 // take consumes one pending blocked signal, waiting up to the given time
 // (Linux), or returns 0.
 func take(nanoseconds int) int {
@@ -51,7 +54,10 @@ func take(nanoseconds int) int {
         number := native.Sigtimedwait(native.Address(&set), 0, native.Address(&timeout));
         return number > 0 ? number : 0;
     }
-    // macOS has no sigtimedwait: only wait for a signal already pending.
+    // macOS has no sigtimedwait. Serialize the pending check and consumption
+    // with other collectors without blocking a competing Pending call.
+    if ((native.MacSignalTryLock((&macSignalLock) -> int) -> u8) == 0) return 0;
+    defer native.MacSignalUnlock((&macSignalLock) -> int);
     pending := native.Zeroed(128);
     if (native.Sigpending(native.Address(&pending)) != 0) return 0;
     for (_, number := range []int{Interrupt, Terminate, Hangup}) {
@@ -76,15 +82,15 @@ func Wait(nanoseconds int) int {
     if (!supported()) return 0;
     if (nanoseconds < 0) nanoseconds = 0;
     if (os.OS() == "linux") return take(nanoseconds);
-    // macOS polls every 10ms.
+    // Poll against the monotonic clock so scheduling delays count toward the timeout.
+    start := time.Monotonic();
     for (;;) {
         number := take(0);
-        if (number != 0 || nanoseconds <= 0) return number;
-        step := nanoseconds < 10000000 ? nanoseconds : 10000000;
-        pause := native.Zeroed(16);
-        *((native.Address(&pause) + 8) -> (*int)) = step;
-        native.Nanosleep(native.Address(&pause), 0);
-        nanoseconds -= step;
+        remaining := nanoseconds - (time.Monotonic() - start);
+        if (number != 0 || remaining <= 0) return number;
+        step := remaining < 10 * time.Millisecond ? remaining : 10 * time.Millisecond;
+        time.Sleep(step);
+        if (time.Monotonic() - start >= nanoseconds) return 0;
     }
     return 0;
 }

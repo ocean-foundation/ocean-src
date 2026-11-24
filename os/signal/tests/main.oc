@@ -2,6 +2,8 @@ package main;
 
 import "io";
 import "os/signal";
+import "threads";
+import "time";
 
 // Blocks the termination signals, reports readiness, then collects two
 // signals sent by tests/test_signal.py and prints their names.
@@ -14,5 +16,16 @@ func main() int {
         io.Println(signal.Name(number));
         collected++;
     }
+    // A worker inherits the blocked signals. Only one collector can get SIGTERM.
+    other := 0;
+    worker := threads.Spawn(func() { other = signal.Wait(time.Second); });
+    io.Println("concurrent ready");
+    received := signal.Wait(time.Second);
+    threads.Await(worker);
+    if (!((received == signal.Terminate && other == 0) || (received == 0 && other == signal.Terminate))) {
+        io.Println("unexpected concurrent results", received, other);
+        return 1;
+    }
+    io.Println("concurrent wait finished");
     return 0;
 }
