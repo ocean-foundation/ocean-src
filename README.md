@@ -341,6 +341,15 @@ with other writers to keep the tree and its path components stable throughout
 deletion. The final system call removes a name relative to an open parent
 directory.
 
+Use `StageRemoval(path, stagingDir)` to move an entry before deleting it.
+On Linux, macOS, and Windows it uses a single same-filesystem rename into a
+unique private slot. Supply an existing, trusted staging directory with a
+stable path. The result is the slot's absolute path, or an empty string if
+the source was missing. The slot contains the moved item as `entry`. Call
+`RemoveAll(slot)` to clean up and keep the slot path if cleanup needs a retry. A replacement created at the original
+path after the move is outside that cleanup. Writers with existing access
+inside the moved tree still need coordination if its contents must stay stable.
+
 These call the C library or Win32 through `internal/native` (UTF-16 wide APIs
 on Windows, so any Unicode path works). On Wasm they return errors.
 

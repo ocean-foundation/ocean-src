@@ -208,6 +208,10 @@ func trimDirectorySeparators(path string, windows bool) string {
     return path[:end];
 }
 
+func isRemovalRootOrDot(path string, leaf string, windows bool) bool {
+    return leaf == "" || leaf == "." || leaf == ".." || (windows && windowsRemoveRootOrDot(path, leaf));
+}
+
 // RemoveAll deletes path and, for a directory, everything inside it. It
 // does not follow symbolic links during traversal, and a missing path is
 // not an error. A filesystem root, "." or ".." cannot be the final element.
@@ -219,7 +223,7 @@ func RemoveAll(path string) Result<bool> {
     path = trimDirectorySeparators(path, windows);
     if (path == "") return Result<bool>.error("os: remove: empty path");
     leaf := lastElement(path);
-    if (leaf == "" || leaf == "." || leaf == ".." || (windows && windowsRemoveRootOrDot(path, leaf))) {
+    if (isRemovalRootOrDot(path, leaf, windows)) {
         return Result<bool>.error(operationError("remove", path, "cannot remove a root or dot directory"));
     }
     if (windows) return removeAllWindows(path);
@@ -365,6 +369,59 @@ func Rename(from string, to string) Result<bool> {
     return Result<bool>.value(true);
 }
 
+// StageRemoval atomically moves the entry at path into a private slot in
+// stagingDir on Linux, macOS, and Windows. It returns the slot's absolute
+// path, or "" if the source is missing. The moved entry is named "entry"
+// inside the slot. Pass the slot to RemoveAll and retain it to retry cleanup.
+// Use an existing staging directory on the same filesystem, with a stable
+// path and access controlled against other writers. The move selects the
+// entry at the source name when the rename runs. Writers that already have
+// access to the moved tree can still change it.
+func StageRemoval(path string, stagingDir string) Result<string> {
+    operation := "stage removal";
+    windows := nativeWindows();
+    path = trimDirectorySeparators(path, windows);
+    source := pathArgument(operation, path);
+    if (source.hasError()) return Result<string>.error(source.error());
+    if (isRemovalRootOrDot(path, lastElement(path), windows))
+        return Result<string>.error(operationError(operation, path, "cannot move a root or dot directory"));
+    if (!windows && !nativeLinux() && !nativeMacOS()) return Result<string>.error(unsupported(operation));
+
+    parent := Realpath(stagingDir);
+    if (parent.hasError()) return Result<string>.error(parent.error());
+    reserved := mkdirTempIn(parent.unwrap(), ".ocean-remove-", operation);
+    if (reserved.hasError()) return reserved;
+    slot := reserved.unwrap();
+    destination := joinNativePath(slot, "entry");
+    target := pathArgument(operation, destination);
+    failure := "";
+    missing := false;
+    if (target.hasError()) failure = target.error();
+    else {
+        from := source.unwrap();
+        to := target.unwrap();
+        if (windows) {
+            // With flags zero the move requires the same volume and an unused destination.
+            if (native.WinMoveFileEx(native.Address(&from), native.Address(&to), 0) != 0)
+                return Result<string>.value(slot);
+            code := native.WinGetLastError();
+            missing = code == 2 || code == 3; // FILE_NOT_FOUND, PATH_NOT_FOUND
+            failure = operationError(operation, path, windowsErrorText(code));
+        } else {
+            if (native.Rename(native.Address(&from), native.Address(&to)) == 0)
+                return Result<string>.value(slot);
+            code := native.Errno();
+            missing = code == 2; // ENOENT
+            failure = operationError(operation, path, native.ErrorText(code));
+        }
+    }
+    // A failed rename leaves only the empty reservation to remove.
+    cleanup := Remove(slot);
+    if (cleanup.hasError()) return Result<string>.error(failure + " (staging cleanup: " + cleanup.error() + ")");
+    if (missing) return Result<string>.value("");
+    return Result<string>.error(failure);
+}
+
 // Chmod sets the permission bits of path, such as 0644 (420). On Windows
 // only the owner write bit is meaningful: clearing it makes the file read-only.
 func Chmod(path string, mode int) Result<bool> {
@@ -478,17 +535,26 @@ func validPrefix(prefix string) bool {
     return true;
 }
 
+func joinNativePath(directory string, name string) string {
+    last := directory[len(directory) - 1];
+    if (last == '/' || (nativeWindows() && last == '\\')) return directory + name;
+    return directory + (nativeWindows() ? "\\" : "/") + name;
+}
+
+func mkdirTempIn(directory string, prefix string, operation string) Result<string> {
+    if (nativeWindows()) return windowsCreateTemp(directory, prefix, true, operation);
+    template := native.CString(joinNativePath(directory, prefix + "XXXXXX"));
+    pointer := native.Mkdtemp(native.Address(&template));
+    if (pointer == 0 || pointer == -1) return Result<string>.error(nativeError(operation, directory));
+    return Result<string>.value(native.FromC(pointer));
+}
+
 // MkdirTemp creates a new directory with a unique name beginning with
 // prefix inside TempDir(), readable only by the current user, and returns
 // its path. The caller removes it, for example with RemoveAll.
 func MkdirTemp(prefix string) Result<string> {
     if (!validPrefix(prefix)) return Result<string>.error("os: mkdirtemp: invalid prefix");
-    if (nativeWindows()) return windowsCreateTemp(prefix, true);
-    directory := TempDir();
-    template := native.CString(directory + "/" + prefix + "XXXXXX");
-    pointer := native.Mkdtemp(native.Address(&template));
-    if (pointer == 0 || pointer == -1) return Result<string>.error(nativeError("mkdirtemp", directory));
-    return Result<string>.value(native.FromC(pointer));
+    return mkdirTempIn(TempDir(), prefix, "mkdirtemp");
 }
 
 // CreateTemp creates a new empty file with a unique name beginning with
@@ -496,7 +562,7 @@ func MkdirTemp(prefix string) Result<string> {
 // and returns its path. Open it with Open; the caller removes it.
 func CreateTemp(prefix string) Result<string> {
     if (!validPrefix(prefix)) return Result<string>.error("os: createtemp: invalid prefix");
-    if (nativeWindows()) return windowsCreateTemp(prefix, false);
+    if (nativeWindows()) return windowsCreateTemp(TempDir(), prefix, false, "createtemp");
     directory := TempDir();
     template := native.CString(directory + "/" + prefix + "XXXXXX");
     fd := native.Mkstemp(native.Address(&template));

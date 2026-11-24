@@ -132,6 +132,58 @@ func TestRemoveAllDirectoryBoundary(t *testing.T) {
     }
 }
 
+func TestStageRemoval(t *testing.T) {
+    root := scratch(t);
+    staging := root + "/staging";
+    source := root + "/source";
+    os.Mkdir(staging).unwrap();
+    os.Mkdir(source).unwrap();
+    os.WriteFile(source + "/old", "original").unwrap();
+
+    first := os.StageRemoval(source + "/", staging).unwrap();
+    if (first == "" || os.Exists(source)) t.Fatal("StageRemoval should move the source");
+    if (os.ReadFile(first + "/entry/old").unwrap() != "original") t.Error("staged directory contents");
+
+    os.WriteFile(source, "replacement").unwrap();
+    second := os.StageRemoval(source, staging).unwrap();
+    if (second == "" || second == first) t.Fatal("StageRemoval should reserve a unique slot");
+    if (os.ReadFile(second + "/entry").unwrap() != "replacement") t.Error("staged file contents");
+    os.WriteFile(source, "keep").unwrap();
+
+    os.RemoveAll(first).unwrap();
+    os.RemoveAll(second).unwrap();
+    if (os.ReadFile(source).unwrap() != "keep") t.Error("staged cleanup touched the replacement");
+    if (os.StageRemoval(root + "/missing/entry", staging).unwrap() != "") t.Error("missing source");
+    if (len(os.ListDir(staging).unwrap()) != 0) t.Error("staging slots should have been removed");
+
+    os.Mkdir(staging + "/inside").unwrap();
+    os.WriteFile(staging + "/preserved", "untouched").unwrap();
+    if (!os.StageRemoval(staging, staging + "/inside").hasError()) t.Error("move into own subtree should fail");
+    if (!os.Exists(staging + "/preserved") || len(os.ListDir(staging + "/inside").unwrap()) != 0)
+        t.Error("failed staging should preserve the source and remove the empty slot");
+    if (!os.StageRemoval(source, root + "/missing").hasError() || !os.Exists(source))
+        t.Error("missing staging directory should leave source in place");
+    if (!os.StageRemoval(staging + "/.", root).hasError()) t.Error("final dot should be rejected");
+}
+
+func TestStageRemovalSymlink(t *testing.T) {
+    if (os.OS() != "linux" && os.OS() != "macos") { t.Skip("POSIX symlink fixture"); return; }
+    root := scratch(t);
+    target := root + "/target";
+    link := root + "/link";
+    os.Mkdir(target).unwrap();
+    os.WriteFile(target + "/kept", "keep").unwrap();
+    command := exec.Command("ln", "-s", target, link);
+    command.Run().unwrap();
+
+    staged := os.StageRemoval(link + "///", root).unwrap();
+    if (staged == "" || !os.Lstat(staged + "/entry").unwrap().IsSymlink())
+        t.Fatal("StageRemoval should move the symbolic link itself");
+    os.RemoveAll(staged).unwrap();
+    if (!os.Lstat(link).hasError() || os.ReadFile(target + "/kept").unwrap() != "keep")
+        t.Error("staged symlink cleanup touched its target");
+}
+
 func TestWorkingDirectory(t *testing.T) {
     dir := scratch(t);
     original := os.Getwd().unwrap();

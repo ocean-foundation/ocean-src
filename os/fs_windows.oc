@@ -226,9 +226,7 @@ func windowsTempSecurity(advapi int, directory bool) Result<int> {
     return Result<int>.value(security);
 }
 
-func windowsCreateTemp(prefix string, directory bool) Result<string> {
-    operation := directory ? "mkdirtemp" : "createtemp";
-    parent := TempDir();
+func windowsCreateTemp(parent string, prefix string, directory bool, operation string) Result<string> {
     advapi := windowsModule("advapi32.dll", true);
     if (advapi == 0) return Result<string>.error(windowsFileError(operation, parent, 127));
     defer windowsCall(windowsKernelSymbol("FreeLibrary"), advapi, 0, 0, 0);
@@ -247,7 +245,7 @@ func windowsCreateTemp(prefix string, directory bool) Result<string> {
         nonce: u64 = 0;
         if ((windowsCall(random, (&nonce) -> int, sizeof(nonce), 0, 0) -> u8) == 0)
             return Result<string>.error(operationError(operation, parent, "could not generate a temporary name"));
-        candidate = parent + "\\" + prefix + decimal((nonce & 0x7fffffffffffffff) -> int);
+        candidate = joinNativePath(parent, prefix + decimal((nonce & 0x7fffffffffffffff) -> int));
         argument := wideArgument(operation, candidate);
         if (argument.hasError()) return Result<string>.error(argument.error());
         data := argument.unwrap();
