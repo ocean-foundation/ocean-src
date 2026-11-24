@@ -1,0 +1,8 @@
+package time;
+
+// The host must return the wall-clock time as int64 nanoseconds since the
+// Unix epoch (a JS BigInt), for example BigInt(Date.now()) * 1000000n.
+extern int ocean_time_now_ns();
+
+// Now returns the wall-clock time in nanoseconds since the Unix epoch.
+func Now() int { return extern.ocean_time_now_ns(); }

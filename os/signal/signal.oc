@@ -1,0 +1,108 @@
+package signal;
+
+import "internal/native";
+import "os";
+import "time";
+
+// Deferred handling of termination signals on Linux and macOS. Block holds
+// back SIGINT, SIGTERM and SIGHUP so they no longer stop the program; Pending
+// and Wait then collect them at points of the program's choosing. Windows and
+// Wasm have no POSIX signals: Block returns an error there.
+
+// Signal numbers (the same on Linux and macOS).
+Hangup := 1;
+Interrupt := 2;
+Terminate := 15;
+
+func supported() bool { return os.OS() == "linux" || os.OS() == "macos"; }
+
+func signalSet() []i8 {
+    set := native.Zeroed(128);
+    native.Sigemptyset(native.Address(&set));
+    native.Sigaddset(native.Address(&set), Hangup);
+    native.Sigaddset(native.Address(&set), Interrupt);
+    native.Sigaddset(native.Address(&set), Terminate);
+    return set;
+}
+
+func mask(how int) Result<bool> {
+    if (!supported()) return Result<bool>.error("signal: signals are unsupported on this platform");
+    set := signalSet();
+    if (native.PthreadSigmask(how, native.Address(&set), 0) != 0) return Result<bool>.error("signal: could not change the signal mask");
+    return Result<bool>.value(true);
+}
+
+// Block defers SIGINT, SIGTERM and SIGHUP for the calling thread and the
+// threads it starts afterwards. Call it early in main, before starting
+// threads, so that no thread receives these signals directly.
+func Block() Result<bool> { return mask((os.OS() == "macos") ? 1 : 0); }
+
+// Unblock restores delivery of the three signals to the calling thread. A
+// signal still pending then takes effect immediately (usually ending the program).
+func Unblock() Result<bool> { return mask((os.OS() == "macos") ? 2 : 1); }
+
+macSignalLock: i32 = 0;
+
+// take consumes one pending blocked signal, waiting up to the given time
+// (Linux), or returns 0.
+func take(nanoseconds int) int {
+    set := signalSet();
+    if (os.OS() == "linux") {
+        timeout := native.Zeroed(16);
+        *(native.Address(&timeout) -> (*int)) = nanoseconds / 1000000000;
+        *((native.Address(&timeout) + 8) -> (*int)) = nanoseconds % 1000000000;
+        number := native.Sigtimedwait(native.Address(&set), 0, native.Address(&timeout));
+        return number > 0 ? number : 0;
+    }
+    // macOS has no sigtimedwait. Serialize the pending check and consumption
+    // with other collectors without blocking a competing Pending call.
+    if ((native.MacSignalTryLock((&macSignalLock) -> int) -> u8) == 0) return 0;
+    defer native.MacSignalUnlock((&macSignalLock) -> int);
+    pending := native.Zeroed(128);
+    if (native.Sigpending(native.Address(&pending)) != 0) return 0;
+    for (_, number := range []int{Interrupt, Terminate, Hangup}) {
+        if (native.Sigismember(native.Address(&pending), number) == 1) {
+            received: i32;
+            if (native.Sigwait(native.Address(&set), (&received) -> int) == 0) return received -> int;
+        }
+    }
+    return 0;
+}
+
+// Pending consumes one blocked signal that has arrived and returns its
+// number, or 0 when none is pending (always 0 where signals are unsupported).
+func Pending() int {
+    if (!supported()) return 0;
+    return take(0);
+}
+
+// Wait waits up to the given number of nanoseconds for a blocked signal and
+// returns its number, or 0 if none arrived in time.
+func Wait(nanoseconds int) int {
+    if (!supported()) return 0;
+    if (nanoseconds < 0) nanoseconds = 0;
+    if (os.OS() == "linux") return take(nanoseconds);
+    // Poll against the monotonic clock so scheduling delays count toward the timeout.
+    start := time.Monotonic();
+    for (;;) {
+        number := take(0);
+        remaining := nanoseconds - (time.Monotonic() - start);
+        if (number != 0 || remaining <= 0) return number;
+        step := remaining < 10 * time.Millisecond ? remaining : 10 * time.Millisecond;
+        time.Sleep(step);
+    }
+    return 0;
+}
+
+// Name returns "SIGINT", "SIGTERM" or "SIGHUP" for those numbers, and
+// "signal N" otherwise.
+func Name(number int) string {
+    if (number == Interrupt) return "SIGINT";
+    if (number == Terminate) return "SIGTERM";
+    if (number == Hangup) return "SIGHUP";
+    digits := make([]i8);
+    n := number < 0 ? -number : number;
+    if (n == 0) digits.append('0');
+    for (n > 0) { digits.prepend(('0' + n % 10) -> i8); n = n / 10; }
+    return "signal " + (number < 0 ? "-" : "") + (digits -> string);
+}

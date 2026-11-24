@@ -1,0 +1,45 @@
+package native_test;
+
+import "internal/native";
+import "testing";
+import "os";
+
+func TestPosixBridges(t *testing.T) {
+    if (os.OS() == "windows") t.Skip("POSIX bridges");
+    if (native.WinGetCurrentProcessId() != -1) t.Error("unsupported Windows bridge should return -1");
+    key := "OCEAN_NATIVE_GETENV_TEST";
+    name := native.CString(key);
+    previous, present := os.LookupEnv(key);
+    if (os.Setenv(key, "known value").hasError()) t.Fatal("could not set test environment variable");
+    defer func() {
+        if (present) { os.Setenv(key, previous); }
+        else { os.Unsetenv(key); }
+    }();
+    value := native.Getenv(native.Address(&name));
+    if (value == 0 || value == -1) t.Fatal("Getenv did not return a value");
+    if (native.FromC(value) != "known value") t.Error("Getenv test value");
+    missing := native.CString("/definitely/not/here");
+    st := native.Zeroed(256);
+    if (native.Stat(native.Address(&missing), native.Address(&st)) != -1) t.Error("Stat of a missing path should fail");
+    if (native.Errno() != 2) t.Errorf("errno = {}, want ENOENT", native.Errno());
+    if (native.LastError() != "No such file or directory") t.Errorf("LastError = {}", native.LastError());
+    if (native.Getpid() <= 0) t.Error("Getpid");
+    buf := native.Zeroed(4096);
+    if (native.FromC(native.Getcwd(native.Address(&buf), 4096)) == "") t.Error("Getcwd");
+}
+
+func TestWide(t *testing.T) {
+    wide := native.Wide("aé😀").unwrap();
+    if (len(wide) != 10) t.Errorf("Wide length {}", len(wide));
+    if (native.FromWide(native.Address(&wide), -1) != "aé😀") t.Error("FromWide round trip");
+    if (native.FromWide(native.Address(&wide), 1) != "a") t.Error("FromWide count");
+    if (!native.Wide("\xff").hasError()) t.Error("Wide invalid");
+}
+
+func TestValidWide(t *testing.T) {
+    valid := native.Wide("�😀").unwrap();
+    if (!native.ValidWide(native.Address(&valid), 3)) t.Error("literal replacement character and surrogate pair");
+    high := []i8{0, -40};
+    low := []i8{0, -36};
+    if (native.ValidWide(native.Address(&high), 1) || native.ValidWide(native.Address(&low), 1)) t.Error("isolated surrogate");
+}

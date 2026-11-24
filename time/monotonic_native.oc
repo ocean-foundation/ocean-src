@@ -43,16 +43,16 @@ func Monotonic() int {
         stp x9, x10, [sp]
         stp x11, x12, [sp, #16]
         stp x13, x14, [sp, #32]
-        str x15, [sp, #48]
+        stp x15, x30, [sp, #48]
         mov w0, #6
         bl _clock_gettime
-        sxtw x19, w0
+        sxtw x0, w0
         ldp x9, x10, [sp]
         ldp x11, x12, [sp, #16]
         ldp x13, x14, [sp, #32]
-        ldr x15, [sp, #48]
+        ldp x15, x30, [sp, #48]
         add sp, sp, #64
-        str x19, ${status}
+        str x0, ${status}
     }
     asm x86_64/windows {
         sub rsp, 32
@@ -65,15 +65,14 @@ func Monotonic() int {
         stp x9, x10, [sp]
         stp x11, x12, [sp, #16]
         stp x13, x14, [sp, #32]
-        str x15, [sp, #48]
+        stp x15, x30, [sp, #48]
         bl GetTickCount64
-        mov x19, x0
         ldp x9, x10, [sp]
         ldp x11, x12, [sp, #16]
         ldp x13, x14, [sp, #32]
-        ldr x15, [sp, #48]
+        ldp x15, x30, [sp, #48]
         add sp, sp, #64
-        str x19, ${millis}
+        str x0, ${millis}
     }
     if (millis >= 0) return millis * 1000000;
     if (status != 0) panic "monotonic clock unavailable on this platform";

@@ -1,0 +1,18 @@
+package os;
+
+// Target predicates used throughout the package.
+func nativeMacOS() bool { return OS() == "macos"; }
+func nativeLinux() bool { return OS() == "linux"; }
+func nativeWasm() bool { return OS() == "js"; }
+
+// ExeSuffix is the file-name suffix of native executables: ".exe" on
+// Windows, otherwise empty.
+func ExeSuffix() string { return nativeWindows() ? ".exe" : ""; }
+
+// PathSeparator is the preferred separator for native paths: '\\' on
+// Windows and '/' elsewhere. Windows also accepts '/'.
+func PathSeparator() i8 { return (nativeWindows() ? '\\' : '/') -> i8; }
+
+// PathListSeparator separates entries of PATH-like variables: ';' on
+// Windows and ':' elsewhere.
+func PathListSeparator() i8 { return (nativeWindows() ? ';' : ':') -> i8; }

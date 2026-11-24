@@ -1,0 +1,79 @@
+package strings_test;
+
+import "strings";
+import "testing";
+
+func equalLists(a []string, b []string) bool {
+    if (len(a) != len(b)) return false;
+    for (i := 0; i < len(a); i++) { if (a[i] != b[i]) return false; }
+    return true;
+}
+
+func TestSearch(t *testing.T) {
+    if (!strings.Contains("seafloor", "floor")) t.Error("Contains");
+    if (strings.Contains("sea", "seas")) t.Error("Contains longer needle");
+    if (!strings.HasPrefix("ocean", "oc") || strings.HasPrefix("oc", "ocean")) t.Error("HasPrefix");
+    if (!strings.HasSuffix("ocean", "an") || strings.HasSuffix("an", "ocean")) t.Error("HasSuffix");
+    if (strings.Index("banana", "ana") != 1) t.Error("Index");
+    if (strings.Index("banana", "") != 0) t.Error("Index empty");
+    if (strings.Index("banana", "x") != -1) t.Error("Index missing");
+    if (strings.LastIndex("banana", "ana") != 3) t.Error("LastIndex");
+    if (strings.LastIndex("banana", "") != 6) t.Error("LastIndex empty");
+    if (strings.IndexByte("banana", 'n') != 2 || strings.LastIndexByte("banana", 'n') != 4) t.Error("IndexByte");
+    if (strings.IndexAny("hello", "ol") != 2 || strings.IndexAny("hello", "xyz") != -1) t.Error("IndexAny");
+    if (!strings.ContainsAny("hello", "xyo") || strings.ContainsAny("hello", "")) t.Error("ContainsAny");
+    if (strings.Count("cheese", "e") != 3 || strings.Count("aaaa", "aa") != 2 || strings.Count("five", "") != 5) t.Error("Count");
+}
+
+func TestSplit(t *testing.T) {
+    if (!equalLists(strings.Split("a,b,,c", ","), []string{"a", "b", "", "c"})) t.Error("Split");
+    if (!equalLists(strings.Split("", ","), []string{""})) t.Error("Split empty text");
+    if (!equalLists(strings.Split("a--b--c", "--"), []string{"a", "b", "c"})) t.Error("Split multibyte sep");
+    if (!equalLists(strings.Split("aé", ""), []string{"a", "é"})) t.Error("Split into characters");
+    if (!equalLists(strings.Split("", ""), []string{""}) || len(strings.SplitN("", "", 0)) != 0) t.Error("Split empty text and separator");
+    for (_, invalid := range []string{"\xe0\x9f\x80", "\xed\xa0\x80", "\xf0\x8f\x80\x80", "\xf4\x90\x80\x80"}) {
+        if (len(strings.Split(invalid, "")) != len(invalid)) t.Error("Split must consume invalid UTF-8 one byte at a time");
+    }
+    if (!equalLists(strings.SplitN("a,b,c", ",", 2), []string{"a", "b,c"})) t.Error("SplitN");
+    if (len(strings.SplitN("a,b", ",", 0)) != 0) t.Error("SplitN zero");
+    if (!equalLists(strings.Fields("  one\ttwo \n three  "), []string{"one", "two", "three"})) t.Error("Fields");
+    if (len(strings.Fields(" \t ")) != 0) t.Error("Fields blank");
+    if (!equalLists(strings.Lines("a\r\nb\n\nc"), []string{"a", "b", "", "c"})) t.Error("Lines");
+    if (!equalLists(strings.Lines("a\n"), []string{"a"})) t.Error("Lines final newline");
+    if (!equalLists(strings.Lines("a\r"), []string{"a\r"})) t.Error("Lines final carriage return");
+    before, after, found := strings.Cut("key=value=x", "=");
+    if (before != "key" || after != "value=x" || !found) t.Error("Cut");
+    before, after, found = strings.Cut("plain", "=");
+    if (before != "plain" || after != "" || found) t.Error("Cut missing");
+    if (strings.Join([]string{"a", "b", "c"}, ", ") != "a, b, c" || strings.Join([]string{}, ",") != "") t.Error("Join");
+}
+
+func TestTransform(t *testing.T) {
+    if (strings.Repeat("ab", 3) != "ababab" || strings.Repeat("x", 0) != "") t.Error("Repeat");
+    if (strings.ReplaceAll("a.b.c", ".", "::") != "a::b::c") t.Error("ReplaceAll");
+    if (strings.Replace("aaaa", "a", "b", 2) != "bbaa") t.Error("Replace limit");
+    if (strings.Replace("ab", "", "-", -1) != "-a-b-") t.Error("Replace empty old");
+    if (strings.TrimSpace("\t hi there \r\n") != "hi there" || strings.TrimSpace("   ") != "") t.Error("TrimSpace");
+    if (strings.Trim("xxhixyx", "xy") != "hi" || strings.TrimLeft("xxhix", "x") != "hix" || strings.TrimRight("xhixx", "x") != "xhi") t.Error("Trim");
+    if (strings.TrimPrefix("prefix-body", "prefix-") != "body" || strings.TrimPrefix("body", "x") != "body") t.Error("TrimPrefix");
+    if (strings.TrimSuffix("file.oc", ".oc") != "file" || strings.TrimSuffix("file", ".oc") != "file") t.Error("TrimSuffix");
+    if (strings.ToLower("Hello, World! É") != "hello, world! É" || strings.ToUpper("Hello é") != "HELLO é") t.Error("case");
+    if (!strings.EqualFold("Ocean", "oCEAN") || strings.EqualFold("Ocean", "Oceans")) t.Error("EqualFold");
+    if (strings.Compare("a", "b") != -1 || strings.Compare("b", "a") != 1 || strings.Compare("a", "a") != 0) t.Error("Compare");
+}
+
+func TestBuilder(t *testing.T) {
+    builder: strings.Builder;
+    builder.WriteString("x=");
+    builder.WriteByte('1');
+    builder.WriteRune(233);
+    builder.WriteRune(128512);
+    builder.WriteRune(-5);
+    builder.WriteLine("!");
+    if (builder.String() != "x=1é😀�!\n") t.Errorf("Builder: got {}", builder.String());
+    if (builder.Len() != 14) t.Errorf("Len: got {}", builder.Len());
+    builder.Truncate(2);
+    if (builder.String() != "x=") t.Error("Truncate");
+    builder.Reset();
+    if (builder.Len() != 0 || builder.String() != "") t.Error("Reset");
+}

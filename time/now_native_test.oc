@@ -1,0 +1,11 @@
+package time_test;
+
+import "time";
+
+import "testing";
+
+func TestNow(t *testing.T) {
+    first := time.Now();
+    // 2024-01-01 and 2200-01-01 in nanoseconds bound any plausible clock.
+    if (first < 1704067200 * time.Second || first > 7258118400 * time.Second) t.Errorf("time.Now() = {} is implausible", first);
+}

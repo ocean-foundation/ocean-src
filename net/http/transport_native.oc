@@ -1,6 +1,7 @@
 package http;
 import "sync";
 import "time";
+import "os";
 
 // libcurl handles native DNS, sockets and verified TLS. CONNECT_ONLY leaves
 // HTTP serialization and bounded response parsing in Ocean; no C callbacks.
@@ -46,13 +47,7 @@ func initialize() bool {
     if (extern.curl_global_init(3) != 0) return false;
     initialized = true; return true;
 }
-func windows() bool {
-    result := 0;
-    asm x86_64/windows { mov qword ptr ${result}, 1 }
-    asm aarch64/windows { mov x0, #1
-        str x0, ${result} }
-    return result != 0;
-}
+func windows() bool { return os.OS() == "windows"; }
 func setLong(handle *void, option i32, value int) bool {
     // C long is 32 bits on Windows, 64 bits on the Unix targets.
     if (windows()) return extern.curl_easy_setopt(handle, option, value -> i32) == 0;

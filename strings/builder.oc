@@ -1,0 +1,47 @@
+package strings;
+
+// Builder accumulates bytes efficiently. Strings are immutable, so repeated
+// concatenation copies; append to a Builder and convert once with String().
+// The zero value is an empty builder ready to use.
+struct Builder { bytes []i8; }
+
+// WriteString appends text.
+func (b *Builder) WriteString(text string) { b.bytes.append(text...); }
+
+// WriteByte appends one byte.
+func (b *Builder) WriteByte(c i8) { b.bytes.append(c); }
+
+// WriteRune appends the UTF-8 encoding of code point r. Invalid code points
+// (negative, surrogates, or above U+10FFFF) append U+FFFD.
+func (b *Builder) WriteRune(r int) {
+    if (r < 0 || r > 1114111 || (r >= 55296 && r <= 57343)) r = 65533;
+    if (r < 128) { b.bytes.append(r -> i8); return; }
+    if (r < 2048) {
+        b.bytes.append((192 | (r >> 6)) -> i8, (128 | (r & 63)) -> i8);
+        return;
+    }
+    if (r < 65536) {
+        b.bytes.append((224 | (r >> 12)) -> i8, (128 | ((r >> 6) & 63)) -> i8, (128 | (r & 63)) -> i8);
+        return;
+    }
+    b.bytes.append((240 | (r >> 18)) -> i8, (128 | ((r >> 12) & 63)) -> i8,
+        (128 | ((r >> 6) & 63)) -> i8, (128 | (r & 63)) -> i8);
+}
+
+// WriteLine appends text followed by a newline.
+func (b *Builder) WriteLine(text string) { b.bytes.append(text...); b.bytes.append('\n'); }
+
+// Len returns the number of bytes written.
+func (b *Builder) Len() int { return len(b.bytes); }
+
+// String returns a copy of the accumulated text.
+func (b *Builder) String() string { return b.bytes -> string; }
+
+// Reset discards the contents.
+func (b *Builder) Reset() { b.bytes = make([]i8); }
+
+// Truncate keeps only the first n bytes. It panics if n is out of range.
+func (b *Builder) Truncate(n int) {
+    if (n < 0 || n > len(b.bytes)) panic "strings: Truncate out of range";
+    for (len(b.bytes) > n) b.bytes.pop();
+}

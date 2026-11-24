@@ -26,7 +26,7 @@ func windowsModule(name string, load bool) int {
         stp x9, x10, [sp]
         stp x11, x12, [sp, #16]
         stp x13, x14, [sp, #32]
-        str x15, [sp, #48]
+        stp x15, x30, [sp, #48]
         cbz x2, 1f
         mov x1, #0
         bl LoadLibraryExA
@@ -35,7 +35,7 @@ func windowsModule(name string, load bool) int {
         2: ldp x9, x10, [sp]
         ldp x11, x12, [sp, #16]
         ldp x13, x14, [sp, #32]
-        ldr x15, [sp, #48]
+        ldp x15, x30, [sp, #48]
         add sp, sp, #64
         str x0, ${result}
     }
@@ -62,69 +62,90 @@ func windowsSymbol(module int, name string) int {
         stp x9, x10, [sp]
         stp x11, x12, [sp, #16]
         stp x13, x14, [sp, #32]
-        str x15, [sp, #48]
+        stp x15, x30, [sp, #48]
         bl GetProcAddress
         ldp x9, x10, [sp]
         ldp x11, x12, [sp, #16]
         ldp x13, x14, [sp, #32]
-        ldr x15, [sp, #48]
+        ldp x15, x30, [sp, #48]
         add sp, sp, #64
         str x0, ${result}
     }
     return result;
 }
 
-// The Win32 calls here take at most four pointer or integer arguments.
 func windowsCall(address int, first int, second int, third int, fourth int) int {
     value, ignored := windowsCallWithError(address,first,second,third,fourth);
     return value;
 }
 
 func windowsCallWithError(address int, first int, second int, third int, fourth int) (int, u32) {
+    return windowsCallArgs(address, [7]int{first,second,third,fourth,0,0,0});
+}
+
+// Capture the return value and thread-local Win32 error in the same call.
+func windowsCallArgs(address int, args [7]int) (int, u32) {
     if (address == 0) return 0,127; // ERROR_PROC_NOT_FOUND
-    args := [4]int{first,second,third,fourth};
     data := args.data -> int;
     result := 0;
     lastError := 0;
     asm x86_64/windows {
-        mov r12, ${address}
-        mov r13, ${data}
-        sub rsp, 48
+        mov r10, ${address}
+        mov r11, ${data}
+        sub rsp, 80
+        mov [rsp + 64], r12
+        mov [rsp + 72], r13
+        mov r12, r10
+        mov r13, r11
         xor ecx, ecx
         call SetLastError
         mov rcx, [r13]
         mov rdx, [r13 + 8]
         mov r8, [r13 + 16]
         mov r9, [r13 + 24]
-        call r12
+        mov rax, [r13 + 32]
         mov [rsp + 32], rax
+        mov rax, [r13 + 40]
+        mov [rsp + 40], rax
+        mov rax, [r13 + 48]
+        mov [rsp + 48], rax
+        call r12
+        mov [rsp + 56], rax
         call GetLastError
-        mov rdx, [rsp + 32]
-        add rsp, 48
+        mov rdx, [rsp + 56]
+        mov r12, [rsp + 64]
+        mov r13, [rsp + 72]
+        add rsp, 80
         mov ${result}, rdx
         mov ${lastError}, rax
     }
     asm aarch64/windows {
-        ldr x19, ${address}
-        ldr x20, ${data}
-        sub sp, sp, #64
+        ldr x0, ${address}
+        ldr x1, ${data}
+        sub sp, sp, #96
         stp x9, x10, [sp]
         stp x11, x12, [sp, #16]
         stp x13, x14, [sp, #32]
-        str x15, [sp, #48]
+        stp x15, x30, [sp, #48]
+        stp x19, x20, [sp, #64]
+        mov x19, x0
+        mov x20, x1
         mov w0, #0
         bl SetLastError
         ldp x0, x1, [x20]
         ldp x2, x3, [x20, #16]
+        ldp x4, x5, [x20, #32]
+        ldr x6, [x20, #48]
         blr x19
-        str x0, [sp, #56]
+        str x0, [sp, #80]
         bl GetLastError
-        ldr x1, [sp, #56]
+        ldr x1, [sp, #80]
         ldp x9, x10, [sp]
         ldp x11, x12, [sp, #16]
         ldp x13, x14, [sp, #32]
-        ldr x15, [sp, #48]
-        add sp, sp, #64
+        ldp x15, x30, [sp, #48]
+        ldp x19, x20, [sp, #64]
+        add sp, sp, #96
         str x1, ${result}
         str x0, ${lastError}
     }

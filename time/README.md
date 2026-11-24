@@ -51,3 +51,11 @@ GetTickCount64 converted from milliseconds (its precision is not nanoseconds).
 The JavaScript/Wasm variant imports `env.ocean_time_monotonic_ns() -> i64`; a JS
 host returns BigInt nanoseconds from a monotonic source such as performance.now().
 The compiler selects `_native.oc` and `_wasm.oc` files before parsing imports.
+
+`Now() int` returns wall-clock nanoseconds since the Unix epoch (UTC). It can
+jump when the system clock changes; measure durations with `Monotonic`. Linux
+and macOS use `clock_gettime(CLOCK_REALTIME)` and Windows uses
+`GetSystemTimePreciseAsFileTime` (Windows 8 or newer), both through
+`internal/native`. The JavaScript/Wasm variant imports
+`env.ocean_time_now_ns() -> i64`, nanoseconds since the epoch as a BigInt.
+There is no calendar or time-zone support.

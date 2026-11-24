@@ -1,0 +1,100 @@
+package sort;
+
+// Stable O(n log n) merge sorts over dynamic arrays, and binary search.
+// Generic functions need explicit type arguments: sort.Slice<Person>(&people, less).
+
+// Slice sorts items in place so that less(items[i], items[j]) is false for
+// every i > j. Equal elements keep their original order (the sort is stable).
+func Slice<T>(items *[]T, less func(T, T) bool) {
+    n := len(*items);
+    if (n < 2) return;
+    // Insertion-sort short runs, then merge them bottom-up through a buffer.
+    run := 12;
+    for (lo := 0; lo < n; lo += run) {
+        hi := lo + run; if (hi > n) hi = n;
+        for (i := lo + 1; i < hi; i++) {
+            value := (*items)[i];
+            j := i;
+            for (j > lo && less(value, (*items)[j - 1])) { (*items)[j] = (*items)[j - 1]; j--; }
+            (*items)[j] = value;
+        }
+    }
+    if (n <= run) return;
+    buffer := (*items)[:];
+    source := items;
+    target := &buffer;
+    for (width := run; width < n; width = width * 2) {
+        for (lo := 0; lo < n; lo += 2 * width) {
+            mid := lo + width; if (mid > n) mid = n;
+            hi := lo + 2 * width; if (hi > n) hi = n;
+            i := lo; j := mid; k := lo;
+            for (i < mid && j < hi) {
+                // Take from the right run only when strictly less, keeping stability.
+                if (less((*source)[j], (*source)[i])) { (*target)[k] = (*source)[j]; j++; }
+                else { (*target)[k] = (*source)[i]; i++; }
+                k++;
+            }
+            for (i < mid) { (*target)[k] = (*source)[i]; i++; k++; }
+            for (j < hi) { (*target)[k] = (*source)[j]; j++; k++; }
+        }
+        swap := source; source = target; target = swap;
+    }
+    if (source != items) {
+        for (i := 0; i < n; i++) (*items)[i] = (*source)[i];
+    }
+}
+
+// IsSorted reports whether items is already sorted by less.
+func IsSorted<T>(items []T, less func(T, T) bool) bool {
+    for (i := 1; i < len(items); i++) { if (less(items[i], items[i - 1])) return false; }
+    return true;
+}
+
+// Search returns the smallest index i in [0, n) for which found(i) is true,
+// assuming found is false and then true over that range; it returns n when
+// found is never true.
+func Search(n int, found func(int) bool) int {
+    lo := 0;
+    hi := n;
+    for (lo < hi) {
+        mid := lo + (hi - lo) / 2;
+        if (found(mid)) hi = mid; else lo = mid + 1;
+    }
+    return lo;
+}
+
+func lessInt(a int, b int) bool { return a < b; }
+func lessFloat(a float, b float) bool { return a < b; }
+func lessString(a string, b string) bool { return a < b; }
+
+// Ints sorts integers in increasing order.
+func Ints(items *[]int) { Slice<int>(items, lessInt); }
+
+// Floats sorts floats in increasing order. NaNs compare false with
+// everything, so their final positions are unspecified.
+func Floats(items *[]float) { Slice<float>(items, lessFloat); }
+
+// Strings sorts strings by unsigned byte order.
+func Strings(items *[]string) { Slice<string>(items, lessString); }
+
+// SearchInts returns the index of value in sorted items, or where it would
+// be inserted to keep items sorted.
+func SearchInts(items []int, value int) int {
+    return Search(len(items), func(i int) bool { return items[i] >= value; });
+}
+
+// SearchStrings is SearchInts for sorted strings.
+func SearchStrings(items []string, value string) int {
+    return Search(len(items), func(i int) bool { return items[i] >= value; });
+}
+
+// Reverse reverses items in place.
+func Reverse<T>(items *[]T) {
+    j := len(*items) - 1;
+    for (i := 0; i < j; i++) {
+        swap := (*items)[i];
+        (*items)[i] = (*items)[j];
+        (*items)[j] = swap;
+        j--;
+    }
+}

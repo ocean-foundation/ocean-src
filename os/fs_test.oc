@@ -1,0 +1,249 @@
+package os_test;
+
+import "os";
+import "os/exec";
+import "strings";
+import "testing";
+import "threads";
+
+func scratch(t *testing.T) string {
+    dir := os.MkdirTemp("ocean-os-test-").unwrap();
+    t.Cleanup(func() { os.RemoveAll(dir).unwrap(); });
+    return dir;
+}
+
+func TestEnvironment(t *testing.T) {
+    name := "OCEAN_OS_TEST_VARIABLE";
+    os.Unsetenv(name).unwrap();
+    value, ok := os.LookupEnv(name);
+    if (ok || value != "") t.Error("unset variable reported as set");
+    os.Setenv(name, "café").unwrap();
+    if (os.Getenv(name) != "café") t.Errorf("Getenv = {}", os.Getenv(name));
+    os.Setenv(name, "").unwrap();
+    value, ok = os.LookupEnv(name);
+    if (!ok || value != "") t.Error("empty variable should be set");
+    os.Unsetenv(name).unwrap();
+    if (os.Getenv(name) != "") t.Error("Unsetenv");
+    if (!os.Setenv("", "x").hasError() || !os.Setenv("A=B", "x").hasError()) t.Error("invalid names");
+    if (os.OS() == "windows" && (!os.Setenv("\xff", "x").hasError() || !os.Unsetenv("\xff").hasError()))
+        t.Error("invalid UTF-8 in Windows environment name");
+    if (os.Getpid() <= 0) t.Error("Getpid");
+}
+
+func TestConcurrentPosixEnvironment(t *testing.T) {
+    platform := os.OS();
+    if (platform != "linux" && platform != "macos") { t.Skip("POSIX environment"); return; }
+    key := "OCEAN_OS_CONCURRENT_ENV_TEST";
+    value := strings.Repeat("environment value ", 32);
+    os.Unsetenv(key).unwrap();
+    defer os.Unsetenv(key);
+    writer := threads.Spawn(func() {
+        for (i := 0; i < 200; i++) {
+            os.Setenv(key, value).unwrap();
+            os.Unsetenv(key).unwrap();
+        }
+    });
+    valid := true;
+    for (i := 0; i < 200; i++) {
+        read, present := os.LookupEnv(key);
+        if ((present && read != value) || (!present && read != "")) valid = false;
+    }
+    threads.Await(writer);
+    if (!valid) t.Error("LookupEnv returned a partial value");
+}
+
+func TestFilesAndDirectories(t *testing.T) {
+    dir := scratch(t);
+    if (!os.IsDir(dir)) t.Fatal("MkdirTemp did not create a directory");
+    file := dir + "/notes.txt";
+    if (os.WriteFile(file, "hello\nworld\n").unwrap() != 12) t.Error("WriteFile count");
+    if (os.ReadFile(file).unwrap() != "hello\nworld\n") t.Error("ReadFile");
+    info := os.Stat(file).unwrap();
+    if (info.Name != "notes.txt" || info.Size != 12 || !info.IsRegular() || info.IsDir()) t.Errorf("Stat: {}", info);
+    if (info.ModTime <= 0) t.Error("ModTime");
+    if (!os.Exists(file) || os.Exists(dir + "/missing")) t.Error("Exists");
+
+    os.MkdirAll(dir + "/a/b/c").unwrap();
+    os.MkdirAll(dir + "/a/b/c").unwrap();
+    if (!os.IsDir(dir + "/a/b/c")) t.Error("MkdirAll");
+    if (!os.MkdirAll(file + "/sub").hasError()) t.Error("MkdirAll below a file should fail");
+    made := os.Mkdir(dir + "/a");
+    if (!made.hasError()) t.Error("Mkdir of an existing directory should fail");
+    else if (made.error() != "os: mkdir " + dir + "/a: File exists") t.Errorf("Mkdir error: {}", made.error());
+
+    os.WriteFile(dir + "/a/b/x.oc", "").unwrap();
+    os.Rename(dir + "/a/b/x.oc", dir + "/a/y.oc").unwrap();
+    names := os.ListDir(dir + "/a").unwrap();
+    if (len(names) != 2 || names[0] != "b" || names[1] != "y.oc") t.Errorf("ListDir: {}", names);
+    if (!os.ListDir(dir + "/missing").hasError()) t.Error("ListDir missing");
+
+    if (!os.Remove(dir + "/a").hasError()) t.Error("Remove of a non-empty directory should fail");
+    os.Remove(dir + "/a/y.oc").unwrap();
+    os.Remove(dir + "/a/b/c").unwrap();
+    if (os.Exists(dir + "/a/b/c")) t.Error("Remove directory");
+    os.RemoveAll(dir + "/a").unwrap();
+    if (os.Exists(dir + "/a")) t.Error("RemoveAll");
+    os.RemoveAll(dir + "/never-existed").unwrap();
+    missing := os.Stat(dir + "/never-existed");
+    if (!missing.hasError() || missing.error() != "os: stat " + dir + "/never-existed: No such file or directory") t.Errorf("Stat error: {}", missing.error());
+}
+
+func TestPermissionsAndLinks(t *testing.T) {
+    if (os.OS() == "windows") t.Skip("POSIX permissions and links");
+    dir := scratch(t);
+    file := dir + "/script";
+    os.WriteFile(file, "#!/bin/sh\n").unwrap();
+    os.Chmod(file, 493).unwrap(); // 0755
+    if (os.Stat(file).unwrap().Perm() != 493) t.Errorf("Perm = {}", os.Stat(file).unwrap().Perm());
+    if (os.Lstat(file).unwrap().IsSymlink()) t.Error("regular file reported as link");
+    if (os.Stat(dir).unwrap().Perm() != 448) t.Error("MkdirTemp should be private (0700)");
+    sub := dir + "/sub";
+    os.Mkdir(sub).unwrap();
+    os.WriteFile(sub + "/kept", "x").unwrap();
+    link := exec.Command("ln", "-s", sub, dir + "/link");
+    link.Run().unwrap();
+    if (!os.Lstat(dir + "/link").unwrap().IsSymlink() || !os.Stat(dir + "/link").unwrap().IsDir()) t.Error("Lstat/Stat of a link");
+    if (os.Realpath(dir + "/link/kept").unwrap() != os.Realpath(sub).unwrap() + "/kept") t.Error("Realpath through a link");
+    // RemoveAll removes the link itself, not the directory it points to.
+    os.RemoveAll(dir + "/link///").unwrap();
+    if (os.Lstat(dir + "/link").hasError() == false || !os.Exists(sub + "/kept")) t.Error("RemoveAll followed a link");
+}
+
+func TestRemoveAllDirectoryBoundary(t *testing.T) {
+    root := scratch(t);
+    target := root + "/target";
+    os.Mkdir(target).unwrap();
+    os.WriteFile(target + "/kept", "x").unwrap();
+    if (!os.RemoveAll(target + "/.//").hasError() || !os.Exists(target + "/kept"))
+        t.Fatal("RemoveAll must reject a final dot before deleting anything");
+    if (os.OS() == "windows" && len(target) >= 2 && target[1] == ':') {
+        device := "\\\\.\\" + strings.ReplaceAll(target, "/", "\\");
+        if (!os.RemoveAll(device + "\\. ").hasError() || !os.Exists(target + "/kept"))
+            t.Error("RemoveAll must reject a normalized final dot in a device path");
+    }
+    if (os.OS() != "windows") {
+        directory := root + "/slash\\";
+        os.Mkdir(directory).unwrap();
+        os.WriteFile(directory + "/child", "x").unwrap();
+        sibling := directory + "child";
+        os.WriteFile(sibling, "kept").unwrap();
+        os.RemoveAll(directory).unwrap();
+        if (os.Exists(directory) || !os.Exists(sibling)) t.Error("a POSIX backslash belongs to the directory name");
+    }
+}
+
+func TestStageRemoval(t *testing.T) {
+    root := scratch(t);
+    staging := root + "/staging";
+    source := root + "/source";
+    os.Mkdir(staging).unwrap();
+    os.Mkdir(source).unwrap();
+    os.WriteFile(source + "/old", "original").unwrap();
+
+    first := os.StageRemoval(source + "/", staging).unwrap();
+    if (first == "" || os.Exists(source)) t.Fatal("StageRemoval should move the source");
+    if (os.ReadFile(first + "/entry/old").unwrap() != "original") t.Error("staged directory contents");
+
+    os.WriteFile(source, "replacement").unwrap();
+    second := os.StageRemoval(source, staging).unwrap();
+    if (second == "" || second == first) t.Fatal("StageRemoval should reserve a unique slot");
+    if (os.ReadFile(second + "/entry").unwrap() != "replacement") t.Error("staged file contents");
+    os.WriteFile(source, "keep").unwrap();
+
+    os.RemoveAll(first).unwrap();
+    os.RemoveAll(second).unwrap();
+    if (os.ReadFile(source).unwrap() != "keep") t.Error("staged cleanup touched the replacement");
+    if (os.StageRemoval(root + "/missing/entry", staging).unwrap() != "") t.Error("missing source");
+    if (len(os.ListDir(staging).unwrap()) != 0) t.Error("staging slots should have been removed");
+
+    os.Mkdir(staging + "/inside").unwrap();
+    os.WriteFile(staging + "/preserved", "untouched").unwrap();
+    if (!os.StageRemoval(staging, staging + "/inside").hasError()) t.Error("move into own subtree should fail");
+    if (!os.Exists(staging + "/preserved") || len(os.ListDir(staging + "/inside").unwrap()) != 0)
+        t.Error("failed staging should preserve the source and remove the empty slot");
+    if (!os.StageRemoval(source, root + "/missing").hasError() || !os.Exists(source))
+        t.Error("missing staging directory should leave source in place");
+    if (!os.StageRemoval(staging + "/.", root).hasError()) t.Error("final dot should be rejected");
+}
+
+func TestStageRemovalSymlink(t *testing.T) {
+    if (os.OS() != "linux" && os.OS() != "macos") { t.Skip("POSIX symlink fixture"); return; }
+    root := scratch(t);
+    target := root + "/target";
+    link := root + "/link";
+    os.Mkdir(target).unwrap();
+    os.WriteFile(target + "/kept", "keep").unwrap();
+    command := exec.Command("ln", "-s", target, link);
+    command.Run().unwrap();
+
+    staged := os.StageRemoval(link + "///", root).unwrap();
+    if (staged == "" || !os.Lstat(staged + "/entry").unwrap().IsSymlink())
+        t.Fatal("StageRemoval should move the symbolic link itself");
+    os.RemoveAll(staged).unwrap();
+    if (!os.Lstat(link).hasError() || os.ReadFile(target + "/kept").unwrap() != "keep")
+        t.Error("staged symlink cleanup touched its target");
+}
+
+func TestWorkingDirectory(t *testing.T) {
+    dir := scratch(t);
+    original := os.Getwd().unwrap();
+    t.Cleanup(func() { os.Chdir(original).unwrap(); });
+    os.Chdir(dir).unwrap();
+    if (os.Getwd().unwrap() != os.Realpath(dir).unwrap()) t.Errorf("Getwd = {}", os.Getwd().unwrap());
+    os.WriteFile("relative.txt", "x").unwrap();
+    if (!os.Exists(dir + "/relative.txt")) t.Error("relative path after Chdir");
+    if (os.OS() == "windows" && len(dir) >= 2 && dir[1] == ':') {
+        names := os.ListDir(dir[:2]).unwrap();
+        if (len(names) != 1 || names[0] != "relative.txt") t.Error("ListDir of a bare drive must use its current directory");
+    }
+    if (!os.Chdir(dir + "/missing").hasError()) t.Error("Chdir missing");
+    if (os.Realpath(".").unwrap() != os.Realpath(dir).unwrap()) t.Error("Realpath .");
+    if (!os.Realpath(dir + "/missing").hasError()) t.Error("Realpath missing");
+}
+
+func TestProgramAndTemporaryFiles(t *testing.T) {
+    exe := os.Executable().unwrap();
+    if (!os.Stat(exe).unwrap().IsRegular()) t.Errorf("Executable {} is not a file", exe);
+    temp := os.TempDir();
+    if (!os.IsDir(temp)) t.Errorf("TempDir {} is not a directory", temp);
+    path := os.CreateTemp("ocean-os-file-").unwrap();
+    t.Cleanup(func() { os.Remove(path).unwrap(); });
+    if (os.Stat(path).unwrap().Size != 0) t.Error("CreateTemp should be empty");
+    if (!os.CreateTemp("bad/prefix").hasError()) t.Error("CreateTemp prefix with separator");
+    other := os.CreateTemp("ocean-os-file-").unwrap();
+    os.Remove(other).unwrap();
+    if (other == path) t.Error("CreateTemp names should be unique");
+    if (os.OS() == "windows" && !os.CreateTemp("\xff").hasError()) t.Error("CreateTemp invalid UTF-8");
+}
+
+func TestWindowsTemporaryACL(t *testing.T) {
+    if (os.OS() != "windows") { t.Skip("Windows ACLs"); return; }
+    dir := scratch(t);
+    file := os.CreateTemp("ocean-os-acl-").unwrap();
+    t.Cleanup(func() { os.Remove(file).unwrap(); });
+    paths := "'" + strings.ReplaceAll(dir, "'", "''") + "', '" + strings.ReplaceAll(file, "'", "''") + "'";
+    script := "$ErrorActionPreference = 'Stop'\n" +
+        "$sidType = [System.Security.Principal.SecurityIdentifier]\n" +
+        "$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value\n" +
+        "foreach ($path in @(" + paths + ")) {\n" +
+        "  $acl = Get-Acl -LiteralPath $path\n" +
+        "  $rules = $acl.GetAccessRules($true, $true, $sidType)\n" +
+        "  if (!$acl.AreAccessRulesProtected -or $acl.GetOwner($sidType).Value -ne $user -or\n" +
+        "      $rules.Count -ne 1 -or $rules[0].IdentityReference.Value -ne $user -or\n" +
+        "      $rules[0].AccessControlType -ne 'Allow' -or $rules[0].FileSystemRights -ne 'FullControl') {\n" +
+        "    throw ('unexpected temporary ACL on ' + $path)\n" +
+        "  }\n" +
+        "}";
+    check := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script);
+    if (check.Run().hasError()) t.Error("temporary file and directory must grant full access only to the current user");
+}
+
+func TestInvalidPaths(t *testing.T) {
+    if (!os.ListDir("").hasError() || !os.Stat("").hasError() || !os.Mkdir("a\x00b").hasError() || !os.Remove("").hasError()) t.Error("empty and NUL paths");
+}
+
+func TestPlatformHelpers(t *testing.T) {
+    windows := os.OS() == "windows";
+    if ((os.ExeSuffix() == ".exe") != windows) t.Error("ExeSuffix");
+    if ((os.PathSeparator() == '\\') != windows || (os.PathListSeparator() == ';') != windows) t.Error("separators");
+}
