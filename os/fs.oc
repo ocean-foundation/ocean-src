@@ -211,6 +211,9 @@ func trimDirectorySeparators(path string, windows bool) string {
 // RemoveAll deletes path and, for a directory, everything inside it. It
 // does not follow symbolic links during traversal, and a missing path is
 // not an error. A filesystem root, "." or ".." cannot be the final element.
+// Deletion can make partial progress before returning an error. To keep the
+// target stable on POSIX, callers must exclude concurrent renames or
+// replacements of the tree and its path components.
 func RemoveAll(path string) Result<bool> {
     windows := nativeWindows();
     path = trimDirectorySeparators(path, windows);
@@ -230,7 +233,7 @@ func RemoveAll(path string) Result<bool> {
     mac := nativeMacOS();
     currentDirectory := mac ? -2 : -100; // AT_FDCWD
     // O_SEARCH on macOS and O_PATH on Linux need only search permission.
-    directory := native.Openat(currentDirectory, native.Address(&argument), posixDirectoryFlags() | (mac ? 0x40000000 : 0x200000));
+    directory := native.Openat(currentDirectory, native.Address(&argument), posixSearchDirectoryFlags());
     if (directory < 0) {
         code := native.Errno();
         return posixRemoveStatus(path, code);
@@ -243,6 +246,10 @@ func posixDirectoryFlags() int {
     // O_RDONLY | O_DIRECTORY | O_CLOEXEC (ARM64 uses different Linux O_DIRECTORY).
     if (nativeMacOS()) return 0x1100000;
     return 0x80000 | (Arch() == "aarch64" ? 0x4000 : 0x10000);
+}
+
+func posixSearchDirectoryFlags() int {
+    return posixDirectoryFlags() | (nativeMacOS() ? 0x40000000 : 0x200000); // O_SEARCH or O_PATH
 }
 
 func posixRemoveStatus(path string, code int) Result<bool> {
@@ -258,6 +265,29 @@ func posixDirectoryIdentity(directory int, path string) Result<directoryIdentity
     if (native.Fstat(directory, base) != 0) return Result<directoryIdentity>.error(nativeError("fstat", path));
     device := nativeMacOS() ? native.ReadI32(base) : native.ReadI64(base);
     return Result<directoryIdentity>.value(directoryIdentity{device, native.ReadI64(base + 8)});
+}
+
+// Check that the final name still refers to the opened directory. POSIX
+// unlinkat takes a name, so callers must exclude renames between this check
+// and removal when they need a stable target.
+func unlinkOpenedPosixDirectory(parent int, address int, directory int, flags int, path string) Result<bool> {
+    expected := posixDirectoryIdentity(directory, path);
+    if (expected.hasError()) return Result<bool>.error(expected.error());
+    candidate := native.Openat(parent, address, flags);
+    if (candidate < 0) {
+        code := native.Errno();
+        return posixRemoveStatus(path, code);
+    }
+    defer native.Close(candidate);
+    actual := posixDirectoryIdentity(candidate, path);
+    if (actual.hasError()) return Result<bool>.error(actual.error());
+    before := expected.unwrap();
+    after := actual.unwrap();
+    if (before.device != after.device || before.inode != after.inode)
+        return Result<bool>.error(operationError("remove", path, "directory changed during traversal"));
+    if (native.Unlinkat(parent, address, nativeMacOS() ? 0x80 : 0x200) == 0) return Result<bool>.value(true); // AT_REMOVEDIR
+    code := native.Errno();
+    return posixRemoveStatus(path, code);
 }
 
 func readPosixDirectory(directory int, path string) Result<[]string> {
@@ -303,7 +333,7 @@ func removeAllPosix(parent *int, name string, path string) Result<bool> {
             if (removed.hasError()) return removed;
         }
         up := native.CString("..");
-        reopened := native.Openat(directory, native.Address(&up), posixDirectoryFlags() | (mac ? 0x40000000 : 0x200000));
+        reopened := native.Openat(directory, native.Address(&up), posixSearchDirectoryFlags());
         if (reopened < 0) return Result<bool>.error(nativeError("open parent", path));
         actual := posixDirectoryIdentity(reopened, path);
         if (actual.hasError()) {
@@ -318,9 +348,7 @@ func removeAllPosix(parent *int, name string, path string) Result<bool> {
         }
         *parent = reopened;
     }
-    if (native.Unlinkat(*parent, address, mac ? 0x80 : 0x200) == 0) return Result<bool>.value(true); // AT_REMOVEDIR
-    code := native.Errno();
-    return posixRemoveStatus(path, code);
+    return unlinkOpenedPosixDirectory(*parent, address, directory, posixDirectoryFlags() | noFollow, path);
 }
 
 // Rename moves from to to, replacing an existing file at to.

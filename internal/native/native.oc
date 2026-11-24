@@ -169,6 +169,134 @@ func Strerror(a0 int) int {
     return result;
 }
 
+func PthreadMutexLock(a0 int) int {
+    result := -1;
+    asm x86_64/linux {
+        mov rdi, ${a0}
+        xor eax, eax
+        call pthread_mutex_lock
+        mov ${result}, rax
+    }
+    asm aarch64/linux {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl pthread_mutex_lock
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    asm riscv64/linux {
+        ld a0, ${a0}
+        addi sp, sp, -48
+        sd ra, 0(sp)
+        sd t3, 8(sp)
+        sd t4, 16(sp)
+        sd t5, 24(sp)
+        sd t6, 32(sp)
+        call pthread_mutex_lock
+        ld ra, 0(sp)
+        ld t3, 8(sp)
+        ld t4, 16(sp)
+        ld t5, 24(sp)
+        ld t6, 32(sp)
+        addi sp, sp, 48
+        sd a0, ${result}
+    }
+    asm x86_64/macos {
+        mov rdi, ${a0}
+        xor eax, eax
+        call _pthread_mutex_lock
+        mov ${result}, rax
+    }
+    asm aarch64/macos {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl _pthread_mutex_lock
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return (result -> i32) -> int;
+}
+
+func PthreadMutexUnlock(a0 int) int {
+    result := -1;
+    asm x86_64/linux {
+        mov rdi, ${a0}
+        xor eax, eax
+        call pthread_mutex_unlock
+        mov ${result}, rax
+    }
+    asm aarch64/linux {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl pthread_mutex_unlock
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    asm riscv64/linux {
+        ld a0, ${a0}
+        addi sp, sp, -48
+        sd ra, 0(sp)
+        sd t3, 8(sp)
+        sd t4, 16(sp)
+        sd t5, 24(sp)
+        sd t6, 32(sp)
+        call pthread_mutex_unlock
+        ld ra, 0(sp)
+        ld t3, 8(sp)
+        ld t4, 16(sp)
+        ld t5, 24(sp)
+        ld t6, 32(sp)
+        addi sp, sp, 48
+        sd a0, ${result}
+    }
+    asm x86_64/macos {
+        mov rdi, ${a0}
+        xor eax, eax
+        call _pthread_mutex_unlock
+        mov ${result}, rax
+    }
+    asm aarch64/macos {
+        ldr x0, ${a0}
+        sub sp, sp, #80
+        stp x9, x10, [sp, #16]
+        stp x11, x12, [sp, #32]
+        stp x13, x14, [sp, #48]
+        stp x15, x30, [sp, #64]
+        bl _pthread_mutex_unlock
+        ldp x9, x10, [sp, #16]
+        ldp x11, x12, [sp, #32]
+        ldp x13, x14, [sp, #48]
+        ldp x15, x30, [sp, #64]
+        add sp, sp, #80
+        str x0, ${result}
+    }
+    return (result -> i32) -> int;
+}
+
 func Getenv(a0 int) int {
     result := -1;
     asm x86_64/linux {

@@ -4,6 +4,7 @@ import "os";
 import "os/exec";
 import "strings";
 import "testing";
+import "threads";
 
 func scratch(t *testing.T) string {
     dir := os.MkdirTemp("ocean-os-test-").unwrap();
@@ -27,6 +28,28 @@ func TestEnvironment(t *testing.T) {
     if (os.OS() == "windows" && (!os.Setenv("\xff", "x").hasError() || !os.Unsetenv("\xff").hasError()))
         t.Error("invalid UTF-8 in Windows environment name");
     if (os.Getpid() <= 0) t.Error("Getpid");
+}
+
+func TestConcurrentPosixEnvironment(t *testing.T) {
+    platform := os.OS();
+    if (platform != "linux" && platform != "macos") { t.Skip("POSIX environment"); return; }
+    key := "OCEAN_OS_CONCURRENT_ENV_TEST";
+    value := strings.Repeat("environment value ", 32);
+    os.Unsetenv(key).unwrap();
+    defer os.Unsetenv(key);
+    writer := threads.Spawn(func() {
+        for (i := 0; i < 200; i++) {
+            os.Setenv(key, value).unwrap();
+            os.Unsetenv(key).unwrap();
+        }
+    });
+    valid := true;
+    for (i := 0; i < 200; i++) {
+        read, present := os.LookupEnv(key);
+        if ((present && read != value) || (!present && read != "")) valid = false;
+    }
+    threads.Await(writer);
+    if (!valid) t.Error("LookupEnv returned a partial value");
 }
 
 func TestFilesAndDirectories(t *testing.T) {

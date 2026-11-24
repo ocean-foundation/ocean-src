@@ -332,6 +332,15 @@ whose error names the operation, the path and the system's reason (for example
 `ReadFile` and `WriteFile`. Environment access is `Getenv`, `LookupEnv`,
 `Setenv` and `Unsetenv`; `Getpid` returns the process ID.
 
+On POSIX, `Getenv`, `LookupEnv`, `Setenv`, and `Unsetenv` coordinate through
+an internal lock. Programs that also access the environment through native
+code must coordinate those accesses separately.
+
+`RemoveAll` may leave a partially deleted tree on error. On POSIX, coordinate
+with other writers to keep the tree and its path components stable throughout
+deletion. The final system call removes a name relative to an open parent
+directory.
+
 These call the C library or Win32 through `internal/native` (UTF-16 wide APIs
 on Windows, so any Unicode path works). On Wasm they return errors.
 

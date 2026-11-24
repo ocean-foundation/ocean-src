@@ -23,6 +23,8 @@ BRIDGES = {
     "ErrnoLocation": (0, "i64", {"linux": "__errno_location", "macos": "__error", "windows": "_errno"}),
     "Strerror": (1, "i64", {"posix": "strerror", "windows": "strerror"}),
     # environment and process
+    "PthreadMutexLock": (1, "i32", {"posix": "pthread_mutex_lock"}),
+    "PthreadMutexUnlock": (1, "i32", {"posix": "pthread_mutex_unlock"}),
     "Getenv": (1, "i64", {"posix": "getenv"}),
     "Setenv": (3, "i32", {"posix": "setenv"}),
     "Unsetenv": (1, "i32", {"posix": "unsetenv"}),
