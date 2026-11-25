@@ -5,8 +5,8 @@ source to destination. Overlapping regions are supported in either direction.
 It returns no value and does not allocate memory.
 
 Both regions must be valid for the requested byte count; destination storage
-must be writable. A zero count accesses neither pointer and permits null
-pointers. Negative counts panic.
+must be writable. A zero count accesses neither pointer and permits zero
+pointers (`zero(*void)`). Negative counts panic.
 
 ```oc
 import "mem";

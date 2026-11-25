@@ -8,6 +8,7 @@ extern i32 ocean_threads_wake(int id);
 extern i32 ocean_threads_kill(int id);
 
 // Main is 0. Worker IDs are positive, monotonically allocated, and never reused.
+// Worker IDs remain queryable after the worker completes and is awaited.
 func CurrentID() int {
     id := extern.ocean_threads_current();
     if (id < 0) panic "unregistered native thread";
@@ -18,6 +19,8 @@ func Spawn(job func()) int {
     if (id < 0) panic "thread creation failed";
     return id;
 }
+// Await waits for completion. The native thread is joined once; repeated and
+// concurrent calls on the same worker succeed.
 func Await(id int) {
     status := extern.ocean_threads_await(id);
     if (status == -1) panic "invalid thread ID";

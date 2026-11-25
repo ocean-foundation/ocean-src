@@ -46,7 +46,7 @@ func copyCString(raw buffer<i8>) string {
 // the exit status, or -1 if the process was ended by a signal, whose number is
 // then in Signal (POSIX only). Copies share the native process and its result;
 // each copy's ExitCode and Signal are populated by its own Wait or Poll.
-struct Process { Pid int; ExitCode int; Signal int; state *processState; }
+struct Process { Pid int; ExitCode int; Signal int; state Optional<*processState>; }
 
 struct processState {
     mutex sync.Mutex;
@@ -57,7 +57,7 @@ struct processState {
     waitFailed bool;
 }
 
-func (c *Cmd) execute(capture bool, combined bool, start *Process) Result<string> {
+func (c *Cmd) execute(capture bool, combined bool, start Optional<*Process>) Result<string> {
     if (c.used) return Result<string>.error("exec: command already started");
     c.used = true;
     c.ExitCode = -1;
@@ -96,15 +96,17 @@ func (c *Cmd) execute(capture bool, combined bool, start *Process) Result<string
     native.output = zero(buffer<i8>);
     native.error = zero(buffer<i8>);
     native.exitCode = -1;
-    if (start != null) {
+    if (start.hasValue()) {
+        proc := start.unwrap();
         handle := 0;
         pid := -1;
         code := extern.ocean_process_start(&native, input.data, len(c.input), c.hasInput ? 1 : 0, &handle, &pid);
         if (code != 0) return Result<string>.error(copyCString(native.error));
-        start.state = new(processState);
-        start.state.handle = handle;
-        start.Pid = pid;
-        start.ExitCode = -1;
+        st := new(processState);
+        st.handle = handle;
+        proc.state = Optional<*processState>.value(st);
+        proc.Pid = pid;
+        proc.ExitCode = -1;
         return Result<string>.value("");
     }
     code := c.hasInput ? extern.ocean_process_run_input(&native, input.data, len(c.input), 1) : extern.ocean_process_run(&native);
@@ -128,14 +130,14 @@ func (c *Cmd) execute(capture bool, combined bool, start *Process) Result<string
 // the result to collect the exit status and release the process.
 func (c *Cmd) Start() Result<Process> {
     process: Process;
-    started := c.execute(false, false, &process);
+    started := c.execute(false, false, Optional<*Process>.value(&process));
     if (started.hasError()) return Result<Process>.error(started.error());
     return Result<Process>.value(process);
 }
 
 func (p *Process) collect() Result<bool> {
-    state := p.state;
-    if (state == null || (state -> int) == 0) return Result<bool>.error("exec: process was not started");
+    if (!p.state.hasValue()) return Result<bool>.error("exec: process was not started");
+    state := p.state.unwrap();
     state.mutex.Lock();
     defer state.mutex.Unlock();
     if (!state.finished) {
@@ -162,8 +164,9 @@ func (p *Process) Wait() Result<int> {
         // Release the native-handle lock between polls so Kill can run.
         time.Sleep(2 * time.Millisecond);
     }
-    if (p.state.signal != 0) return Result<int>.error("exec: process ended by signal " + decimal(p.state.signal));
-    if (p.state.exitCode != 0) return Result<int>.error("exec: process exited unsuccessfully");
+    state := p.state.unwrap();
+    if (state.signal != 0) return Result<int>.error("exec: process ended by signal " + decimal(state.signal));
+    if (state.exitCode != 0) return Result<int>.error("exec: process exited unsuccessfully");
     return Result<int>.value(0);
 }
 
@@ -175,8 +178,8 @@ func (p *Process) Poll() Result<bool> { return p.collect(); }
 // Windows). Call Wait afterwards to release it. Killing a process that has
 // already been waited for is an error.
 func (p *Process) Kill() Result<bool> {
-    state := p.state;
-    if (state == null || (state -> int) == 0) return Result<bool>.error("exec: process was not started");
+    if (!p.state.hasValue()) return Result<bool>.error("exec: process was not started");
+    state := p.state.unwrap();
     state.mutex.Lock();
     defer state.mutex.Unlock();
     if (state.finished) return Result<bool>.error("exec: process already finished");
@@ -192,12 +195,12 @@ func decimal(n int) string {
 }
 
 func (c *Cmd) Run() Result<int> {
-    result := c.execute(false, false, null);
+    result := c.execute(false, false, Optional<*Process>.none);
     if (result.hasError()) return Result<int>.error(result.error());
     return Result<int>.value(c.ExitCode);
 }
-func (c *Cmd) Output() Result<string> { return c.execute(true, false, null); }
-func (c *Cmd) CombinedOutput() Result<string> { return c.execute(true, true, null); }
+func (c *Cmd) Output() Result<string> { return c.execute(true, false, Optional<*Process>.none); }
+func (c *Cmd) CombinedOutput() Result<string> { return c.execute(true, true, Optional<*Process>.none); }
 
 func LookPath(name string) Result<string> {
     if (name == "" || !clean(name)) return Result<string>.error("exec: invalid executable");

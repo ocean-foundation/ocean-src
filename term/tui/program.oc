@@ -92,14 +92,22 @@ func (program *Program) execute(command Cmd) {
                 child := value.commands[i];
                 children.append(threads.Spawn(func() { program.execute(child); }));
             }
-            for (i := 0; i < len(children); i++) threads.Await(children[i]);
+            for (len(children) > 0) {
+                last := len(children) - 1;
+                threads.Await(children[last]);
+                children.remove(last);
+            }
             return;
     }
     program.Send(message);
 }
 func stopWorkers(workers *[]int) {
     for (i := 0; i < len(*workers); i++) threads.Kill((*workers)[i]);
-    for (i := 0; i < len(*workers); i++) threads.Await((*workers)[i]);
+    for (len(*workers) > 0) {
+        last := len(*workers) - 1;
+        threads.Await((*workers)[last]);
+        (*workers).remove(last);
+    }
 }
 func (program *Program) reap() {
     for (i := len(program.workers) - 1; i >= 0; i--) {

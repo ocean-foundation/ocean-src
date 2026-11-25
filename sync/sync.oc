@@ -3,8 +3,12 @@ package sync;
 extern void ocean_threads_mutex_lock(*void state);
 extern i32 ocean_threads_mutex_try_lock(*void state);
 extern i32 ocean_threads_mutex_unlock(*void state);
+extern void ocean_threads_mutex_destroy(*void state);
+extern void ocean_threads_mutex_close(*void state);
 extern i32 ocean_threads_group_add(*void state, int delta);
 extern void ocean_threads_group_wait(*void state);
+extern void ocean_threads_group_destroy(*void state);
+extern void ocean_threads_group_close(*void state);
 
 // Zero values are ready to use. Keep at a stable address; never copy after use.
 struct Mutex { state uint; }
@@ -13,6 +17,8 @@ func (mutex *Mutex) TryLock() bool { return extern.ocean_threads_mutex_try_lock(
 func (mutex *Mutex) Unlock() {
     if (extern.ocean_threads_mutex_unlock(&mutex.state) < 0) panic "unlock of an unlocked Mutex";
 }
+func (mutex *Mutex) Destroy() { extern.ocean_threads_mutex_destroy(&mutex.state); }
+func (mutex *Mutex) Close() { extern.ocean_threads_mutex_close(&mutex.state); }
 
 // Add work before spawning it. Reuse only after previous Wait calls return.
 struct WaitGroup { state uint; }
@@ -24,3 +30,5 @@ func (group *WaitGroup) Add(delta int) {
 }
 func (group *WaitGroup) Done() { group.Add(-1); }
 func (group *WaitGroup) Wait() { extern.ocean_threads_group_wait(&group.state); }
+func (group *WaitGroup) Destroy() { extern.ocean_threads_group_destroy(&group.state); }
+func (group *WaitGroup) Close() { extern.ocean_threads_group_close(&group.state); }
