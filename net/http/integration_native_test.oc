@@ -59,15 +59,26 @@ func deadlineFixture(t *testing.T, name string) {
 func TestTLSHandshakeTimeout(t *testing.T) { deadlineFixture(t, "HANDSHAKE_TIMEOUT"); }
 func TestHTTPHeaderTimeout(t *testing.T) { deadlineFixture(t, "HEADER_TIMEOUT"); }
 func TestHTTPBodyTimeout(t *testing.T) { deadlineFixture(t, "BODY_TIMEOUT"); }
+func awaitPending(worker int, awaited *bool) {
+    if (!(*awaited)) { *awaited = true; threads.Await(worker); }
+}
+func awaitWorkers(workers *[]int) {
+    for (len(*workers) > 0) {
+        last := len(*workers) - 1;
+        threads.Await((*workers)[last]);
+        (*workers).remove(last);
+    }
+}
 func cancellationFixture(t *testing.T, name string) {
     url := fixture(t, name); scale := fixtureScale();
     cancel: Cancellation; canceledAt := 0;
     request := NewRequestWithCancel(&cancel, "GET", url, "").unwrap();
     worker := threads.Spawn(func() { time.Sleep(100 * scale * time.Millisecond); canceledAt = time.Monotonic(); cancel.Cancel(); });
-    defer threads.Await(worker);
+    awaited := false;
+    defer awaitPending(worker, &awaited);
     client: Client; client.Timeout = 2 * scale * time.Second;
     result := client.Do(request); finishedAt := time.Monotonic();
-    threads.Await(worker);
+    awaitPending(worker, &awaited);
     if (!result.hasError() || result.error() != "http: request canceled") t.Fatal("in-flight cancellation did not fire");
     if (finishedAt - canceledAt >= 500 * scale * time.Millisecond)
         t.Fatalf("cancellation returned late: {}ms after cancellation", (finishedAt-canceledAt)/time.Millisecond);
@@ -79,16 +90,16 @@ func uploadFixture(t *testing.T, name string, canceled bool) {
     url := fixture(t, name); scale := fixtureScale();
     payload := "x"; for (i := 0; i < 23; i++) payload += payload;
     client: Client; client.Timeout = 300 * scale * time.Millisecond;
-    cancel: Cancellation; worker := -1; canceledAt := 0;
+    cancel: Cancellation; worker := -1; canceledAt := 0; awaited := false;
     request := NewRequestWithCancel(&cancel, "POST", url, payload).unwrap();
     if (canceled) {
         client.Timeout = 2 * scale * time.Second;
         worker = threads.Spawn(func() { time.Sleep(300 * scale * time.Millisecond); canceledAt = time.Monotonic(); cancel.Cancel(); });
-        defer threads.Await(worker);
+        defer awaitPending(worker, &awaited);
     }
     start := time.Monotonic(); result := client.Do(request); finishedAt := time.Monotonic();
     elapsed := finishedAt - start;
-    if (canceled) threads.Await(worker);
+    if (canceled) awaitPending(worker, &awaited);
     expected := canceled ? "http: request canceled" : "http: timeout exceeded";
     if (!result.hasError() || result.error() != expected) t.Fatal("blocked upload was not interrupted");
     // Sleep provides a minimum delay, not a scheduling deadline. Measure the
@@ -148,6 +159,7 @@ func TestHTTPTruncatedResponse(t *testing.T) {
 func TestHTTPConcurrentRequests(t *testing.T) {
     url := fixture(t, "CONCURRENT"); scale := fixtureScale();
     results: [4]bool; workers := []int{};
+    defer awaitWorkers(&workers);
     for (i := 0; i < 4; i++) {
         slot := i;
         worker := threads.Spawn(func() {
@@ -156,9 +168,8 @@ func TestHTTPConcurrentRequests(t *testing.T) {
             results[slot] = !result.hasError() && result.unwrap().Body == "OK";
         });
         workers.append(worker);
-        defer threads.Await(worker);
     }
-    for (_, worker := range workers) threads.Await(worker);
+    awaitWorkers(&workers);
     for (_, ok := range results) { if (!ok) t.Fatal("concurrent independent request failed"); }
 }
 func TestHTTPConnectionRefused(t *testing.T) {

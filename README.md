@@ -179,7 +179,7 @@ Construct a present value with `Optional<int>.value(42)` and an absent value
 with `Optional<int>.none`. The former `Some` and `None` variant names are no
 longer supported. Uninitialized optionals and `zero(Optional<T>)` are `none`.
 Assigning `null` selects `none`, which compares equal to `null`.
-`Optional<*int>.value(null)` is still present.
+`Optional<*int>.value(zero(*int))` and `Optional<any>.value(null)` are still present; raw `*T` and unsized `buffer<T>` are non-nullable (use `Optional<*T>` or `Optional<buffer<T>>`).
 
 `hasValue() bool` returns true for `value` and false for `none`.
 `unwrap() T` returns the present payload and panics on `none`, attributed to
@@ -219,8 +219,7 @@ A user-declared Result may shadow the built-in name and remains a distinct type.
 `unwrapOrElse` accepts a value, not a callback; its argument is evaluated with
 normal function-call rules even when the Result holds a value. Payloads and
 fallbacks retain ordinary value-copy and ownership behavior. `zero(T)` follows
-Ocean's existing zero semantics, including a zero-address pointer distinct from
-explicit `null`.
+Ocean's existing zero semantics, including the zero-address pointer `zero(*T)` (`0x0`).
 
 ```ocean
 package main;

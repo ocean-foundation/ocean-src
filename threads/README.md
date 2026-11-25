@@ -8,15 +8,17 @@ on Linux/macOS and Win32 threads on Windows. Compilation for Wasm fails.
 | --- | --- |
 | `Spawn(job func()) int` | Start a function or closure and return its positive ID. Panics on failure or an uninitialized function. |
 | `CurrentID() int` | Return the caller's ID. Main is always 0. |
-| `Await(id int)` | Block until completion and join the worker. Multiple and repeated awaits work. Awaiting yourself panics. |
+| `Await(id int)` | Block until completion, join the worker, and reclaim its record. Awaiting yourself panics. |
 | `IsDone(id int) bool` | Report whether the thread's function and deferred calls have finished. |
 | `Yield()` | Park the caller until woken while parked. |
-| `Wake(id int)` | Resume a yielded thread. Wakes of running/completed threads are discarded. Unknown IDs panic. |
+| `Wake(id int)` | Resume a yielded thread. Wakes of running/completed (unawaited) threads are discarded. Unknown or reclaimed IDs panic. |
 | `Return()` | Run defers and exit just the caller, from any call depth. |
-| `Kill(id int)` | Request cancellation of a thread. Call Await afterward to wait for termination. Completed threads are unaffected. |
+| `Kill(id int)` | Request cancellation of a thread. Call Await afterward to wait for termination. Completed (unawaited) threads are unaffected. |
 
-IDs are monotonically allocated and never reused. Completed IDs remain valid.
-All identifier-taking functions panic for unknown IDs, including negative IDs.
+IDs are monotonically allocated and never reused. Main thread ID `0` remains valid,
+whereas awaiting a worker thread reclaims its record: subsequent `Await`, `IsDone`,
+`Wake`, and `Kill` calls on that worker ID panic (`invalid thread ID`).
+All identifier-taking functions panic for unknown or negative IDs.
 
 `Kill` is cooperative: compiler checkpoints cover function entries, loop
 iterations, and goto jumps. Yield, Await, mutex waits, and wait-group waits also

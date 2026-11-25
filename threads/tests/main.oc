@@ -90,6 +90,29 @@ func returned(done *sync.WaitGroup, depth int) {
 }
 unexpected := false;
 func rescue() { recover(); }
+func expectReclaimed(id int, operation int) {
+    unexpected = false;
+    defer rescue();
+    if (operation == 0) threads.Await(id);
+    if (operation == 1) threads.IsDone(id);
+    if (operation == 2) threads.Wake(id);
+    if (operation == 3) threads.Kill(id);
+    unexpected = true;
+}
+func countReclaimed(mu *sync.Mutex, reclaimed *int) {
+    if (recover() != null) {
+        mu.Lock();
+        *reclaimed = *reclaimed + 1;
+        mu.Unlock();
+    }
+}
+func tryAwaitTarget(target int, mu *sync.Mutex, succeeded *int, reclaimed *int) {
+    defer countReclaimed(mu, reclaimed);
+    threads.Await(target);
+    mu.Lock();
+    *succeeded = *succeeded + 1;
+    mu.Unlock();
+}
 func returnFromDefer(done *sync.WaitGroup) {
     defer done.Done();
     defer threads.Return();
@@ -171,10 +194,10 @@ func main() {
         done.Wait();
         for (index, id := range ids) {
             threads.Await(id);
-            threads.Await(id);
-            require(threads.IsDone(id));
-            threads.Wake(id);
-            threads.Kill(id);
+            for (op := 0; op < 4; op++) {
+                expectReclaimed(id, op);
+                require(!unexpected);
+            }
         }
         require(count == 24000);
         require(mutex.TryLock());
@@ -184,9 +207,15 @@ func main() {
         unlocked := threads.Spawn(func() { mutex.Unlock(); });
         threads.Await(unlocked);
         require(mutex.TryLock()); mutex.Unlock();
+        mutex.Destroy();
+        mutex.Close();
+        mutex.Lock(); mutex.Unlock(); mutex.Destroy();
         done.Add(1);
         id := threads.Spawn(func() { done.Done(); });
         done.Wait(); threads.Await(id);
+        done.Destroy();
+        done.Close();
+        done.Add(1); done.Done(); done.Wait(); done.Destroy();
     }
     if (mode == "return") {
         done: sync.WaitGroup;
@@ -262,12 +291,19 @@ func main() {
     if (mode == "awaiters") {
         gate: sync.WaitGroup;
         gate.Add(1);
+        mu: sync.Mutex;
+        succeeded := 0;
+        reclaimed := 0;
         target := threads.Spawn(func() { gate.Wait(); });
         ids := []int{};
-        for (i := 0; i < 8; i++) ids.append(threads.Spawn(func() { threads.Await(target); }));
+        for (i := 0; i < 8; i++) ids.append(threads.Spawn(func() { tryAwaitTarget(target, &mu, &succeeded, &reclaimed); }));
         gate.Done();
         for (index, id := range ids) threads.Await(id);
-        threads.Await(target);
+        require(succeeded == 1 && reclaimed == 7);
+        expectReclaimed(target, 0);
+        require(!unexpected);
+        gate.Destroy();
+        mu.Destroy();
     }
     if (mode == "closures") {
         ids := []int{};

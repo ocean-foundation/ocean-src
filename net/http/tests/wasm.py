@@ -86,6 +86,7 @@ const env={
   dprintf(){throw Error('unexpected diagnostic');},
   exit(c){throw Error('unexpected exit '+c);},
   write(fd,p,n){return BigInt(n);},
+  ocean_write(fd,p,n){return n;},
   __cxa_atexit(){return 0;}
 };
 for(const item of imports)if(!(item.name in env))throw Error('unimplemented test runtime import '+item.name);
