@@ -120,7 +120,8 @@ def main():
                 assert result.returncode == 0, result.stderr
                 if attempt:
                     calls = [json.loads(line) for line in log.read_text().splitlines()]
-                    assert len(calls) == 1 and "-pthread" in calls[0], calls
+                    native = [args for args in calls if args != ["--version"]]
+                    assert len(native) == 1 and "-pthread" in native[0] and "-c" not in native[0], calls
     print("thread and synchronization tests passed")
 
 

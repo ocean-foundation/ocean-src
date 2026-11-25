@@ -22,10 +22,10 @@ starting a new group while previous Wait calls are returning panic. Reuse only
 after every preceding Wait has returned. Register deferred Done for each task
 so thread termination does not leave unfinished work.
 
-Native state is lazily initialized. Call `Destroy()` or `Close()` once no
-goroutine/thread is using the synchronizer to release the underlying OS
-synchronization primitives before process exit (safe to call repeatedly; any
-unclosed primitives are still cleaned up at process shutdown). Linux and macOS
-use pthreads; Windows uses Win32 synchronization. Wasm compilation fails. Mutex
+Native state is lazily initialized. Call `Destroy()` or `Close()` after all
+threads have finished using the object. Closing an already closed object or
+calling another operation on it panics. Process shutdown cleans up any
+objects that are still open. Linux and macOS use pthreads. Windows uses
+Win32 synchronization. Wasm compilation fails. Mutex
 and wait-group waits can be interrupted by threads.Kill, which runs deferred
 cleanup before terminating the caller.
