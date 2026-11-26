@@ -26,6 +26,17 @@ output = command.CombinedOutput().unwrap();
   `CombinedOutput() Result<string>` captures stdout and stderr in one file,
   preserving their write order.
 
+- `SetStdin(text string)` supplies the command's standard input (staged in a
+  temporary file, so any size is accepted); otherwise stdin is inherited.
+- `Start() Result<Process>` runs the command in the background with inherited
+  stdout/stderr. `Process` has `Pid`, `ExitCode` and `Signal` fields and the
+  methods `Wait() Result<int>` (blocks; errors like `Run` on failure; repeatable),
+  `Poll() Result<bool>` (non-blocking completion check) and `Kill() Result<bool>`
+  (SIGKILL or TerminateProcess). Always `Wait` to release the process. After a
+  signal exit `ExitCode` is -1 and `Signal` holds the number (POSIX only).
+  Copies share the process and its completion result. Each copy updates its
+  result fields when its own `Wait` or `Poll` observes completion.
+
 A command may be executed once. Missing executables, invalid NUL-containing
 arguments/paths/environment entries, spawn failures, wait failures, and nonzero
 or signal exits return errors. ExitCode is -1 before completion or on a signal,
@@ -37,13 +48,14 @@ more than a pipe buffer of output does not deadlock. Temporary files and spawn
 actions are released, and interrupted waits are retried. Output is returned
 as an owned string, including embedded NUL bytes.
 
-The initial implementation has no Start/Wait, pipes, configurable standard
-streams, context cancellation, timeout, or Wasm backend. Empty Env
+There are no pipes between processes, no output capture for started
+processes, no context cancellation or timeout (use `Poll` and `Kill`), and no
+Wasm backend. Empty Env
 cannot request an empty child environment. Child output capture requires a
 writable system temporary directory and has no output-size bound.
 
 Run `ocean test os/exec` for the Unix utility tests. On Windows, run
-`python os/exec/tests/integration.py /path/to/ocean-c.exe`; it compiles a small
+`python os/exec/tests/integration.py /path/to/ocean.exe`; it compiles a small
 native fixture with Clang and tests arguments, replacement environments, working
 directories, exit codes, and large output without PowerShell startup overhead.
 Each invocation logs START/DONE markers, the command, exit code, and elapsed
@@ -51,5 +63,7 @@ time. Timeout reports retain the last START marker. No network access is needed.
 Use the matching compiler and this standard-library source tree.
 
 The matching compiler supplies the native process bridge: POSIX spawn on Unix
-and Unicode CreateProcess on Windows. Windows argument quoting preserves spaces,
+and Unicode CreateProcess on Windows. `SetStdin` and `Start` use the bridge's
+`ocean_process_run_input`, `ocean_process_start`, `ocean_process_wait` and
+`ocean_process_kill` entry points, so they need a compiler that provides them. Windows argument quoting preserves spaces,
 quotes and backslashes without invoking a shell.

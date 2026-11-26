@@ -1,0 +1,20 @@
+package signal_test;
+
+import "os/signal";
+import "os";
+import "testing";
+
+// Delivering a real signal needs a single-threaded process; see
+// tests/test_signal.py. These checks need no signal.
+func TestWithoutSignals(t *testing.T) {
+    if (os.OS() != "linux" && os.OS() != "macos") {
+        if (!signal.Block().hasError()) t.Error("Block should be unsupported");
+        if (signal.Pending() != 0 || signal.Wait(1000) != 0) t.Error("Pending/Wait should report nothing");
+        return;
+    }
+    signal.Block().unwrap();
+    if (signal.Pending() != 0) t.Error("unexpected pending signal");
+    if (signal.Wait(1000000) != 0) t.Error("Wait should time out");
+    signal.Unblock().unwrap();
+    if (signal.Name(2) != "SIGINT" || signal.Name(15) != "SIGTERM" || signal.Name(1) != "SIGHUP" || signal.Name(9) != "signal 9") t.Error("Name");
+}

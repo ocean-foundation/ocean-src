@@ -89,14 +89,14 @@ size_t and pointers are 64-bit on all seven native targets.
 
 Native applications need libcurl 7.68+ built with TLS and asynchronous DNS, an
 appropriate CA trust store, and the matching libcurl development/import library.
-The accompanying compiler automatically links `-lcurl` and preserves that
-requirement on full object-cache hits. libffi and the native threading runtime
+Ocean automatically links `-lcurl` and caches the resulting executable.
+libffi and the native threading runtime
 are also required by the existing Ocean ABI and synchronization implementation.
 For example, install libcurl4-openssl-dev on Debian/Ubuntu, curl on Homebrew, or
 the target-matching curl package in MSYS2 CLANG64/CLANGARM64. Ensure Clang can find
 the library and the OS loader can find its shared library/DLL and dependencies.
-Static builds additionally need libcurl's static transitive libraries; automatic
-static dependency discovery is not implemented. No curl executable is invoked.
+Static builds need `pkg-config` and libcurl's static transitive libraries.
+Set `PKG_CONFIG_LIBDIR` to the target's package metadata for cross builds.
 
 Requires compiler support for `_native.oc`/`_wasm.oc` source variants (and their
 `_native_test.oc`/`_wasm_test.oc` counterparts), selected before import resolution.
@@ -136,10 +136,10 @@ host may derive nanoseconds from performance.now().
 
 ```sh
 ocean test net/http time --notty
-python3 net/http/tests/integration.py /path/to/ocean-c
-python3 net/http/tests/linking.py /path/to/ocean-c
-python3 net/http/tests/wasm.py /path/to/ocean-c
-python3 net/http/tests/assembly.py /path/to/asm_backend_probe /path/to/clang
+python3 net/http/tests/integration.py /path/to/ocean
+python3 net/http/tests/linking.py /path/to/ocean
+python3 net/http/tests/wasm.py /path/to/ocean
+python3 net/http/tests/assembly.py /path/to/ocean /path/to/clang
 ```
 
 All library behavior assertions are native Ocean tests in *_native_test.oc,
@@ -153,8 +153,8 @@ its minimal allocator shim is test-only, not a production runtime/Fetch adapter.
 The assembly test checks all seven clock variants at -O0/-O2. The CI workflow
 covers each native target plus Wasm; foreign execution requires those CI runners.
 
-CI uses Clang/LLD 23 for native x86-64/AArch64 and JavaScript/Wasm. RISC-V uses
-the Ubuntu 26.04 native Clang 21 toolchain. The linking harness accepts
+Linux x86-64/AArch64 and JavaScript/Wasm CI use Clang/LLD 23. RISC-V uses
+Ubuntu 26.04's Clang 21. The linking harness accepts
 `OCEAN_HTTP_BUILD_TIMEOUT` in seconds (default 120, CI uses 900 under QEMU);
 this compile budget does not change HTTP request deadlines. Subprocess output
 is decoded as UTF-8 on every host.

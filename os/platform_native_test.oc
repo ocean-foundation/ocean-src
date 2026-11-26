@@ -1,0 +1,100 @@
+package os_test;
+
+import "io";
+import "os";
+import "testing";
+import "time";
+
+func TestTargetPlatform(t *testing.T) {
+    system := os.OS();
+    architecture := os.Arch();
+    if (architecture != "x86_64" && architecture != "aarch64" && architecture != "riscv64") {
+        t.Fatal("unexpected native target architecture: "+architecture);
+    }
+    if (system != "linux" && system != "macos" && system != "windows") {
+        t.Fatal("unexpected native target operating system: "+system);
+    }
+    if (architecture == "riscv64" && system != "linux") t.Fatal("RISC-V should report Linux");
+}
+
+func TestWindowsKnownFolder(t *testing.T) {
+    savedGamesID := "4C5C32FF-BB9D-43B0-B5B4-2D72E54EAAA4";
+    savedGames := os.WindowsKnownFolder(savedGamesID);
+    if (os.OS() != "windows") {
+        if (!savedGames.hasError()) t.Fatal("known folders require Windows");
+        return;
+    }
+    if (savedGames.unwrap() == "") t.Fatal("Saved Games should have a path");
+    if (os.WindowsKnownFolder("{"+savedGamesID+"}").unwrap() != savedGames.unwrap()) {
+        t.Fatal("braced and bare GUIDs should resolve to the same path");
+    }
+    if (os.WindowsKnownFolder("{fdd39ad0-238f-46af-adb4-6c85480369c7}").unwrap() == "") {
+        t.Fatal("Documents should have a path");
+    }
+    if (!os.WindowsKnownFolder("GC5C32FF-BB9D-43B0-B5B4-2D72E54EAAA4").hasError()) {
+        t.Fatal("malformed GUID should return an error");
+    }
+    // FOLDERID_ComputerFolder is a virtual folder without a filesystem path.
+    if (!os.WindowsKnownFolder("0AC0837C-BBF8-452A-850D-79D08E667CA7").hasError()) {
+        t.Fatal("known folders without a filesystem path should return an error");
+    }
+}
+
+func TestWindowsFilesystem(t *testing.T) {
+    if (os.OS() != "windows") {
+        if (!os.WindowsStat(".").hasError()) {
+            t.Fatal("Windows-only operations must report unsupported targets");
+        }
+        return;
+    }
+    temp := os.WindowsLookupEnv("TEMP").unwrap();
+    root := temp+"/ocean-os-界-"+io.Sprint(time.Monotonic());
+    if (os.WindowsStat(root).unwrap().Exists) t.Fatal("test path already exists");
+    os.WindowsMkdir(root).unwrap();
+    defer os.WindowsRemove(root);
+    stat := os.WindowsStat(root).unwrap();
+    if (!stat.Exists || !stat.Directory) t.Fatal("expected a directory");
+    if (len(os.WindowsReadDir(root).unwrap()) != 0) t.Fatal("new directory should be empty");
+    from := root+"/源🙂.save";
+    to := root+"/保存.save";
+    writeFile(from,"new");
+    defer os.WindowsRemove(from);
+    writeFile(to,"old");
+    defer os.WindowsRemove(to);
+    os.WindowsRename(from,to).unwrap();
+    if (os.WindowsStat(from).unwrap().Exists) t.Fatal("renamed file still exists");
+    entries := os.WindowsReadDir(root).unwrap();
+    if (len(entries) != 1 || entries[0].Name != "保存.save" || entries[0].Directory) t.Fatal("unexpected directory entries");
+    file := os.Open(to,os.FileMode.Read).unwrap();
+    contents := file.Readchunk(16).unwrap() -> string;
+    file.Close();
+    if (contents != "new") t.Fatal("rename did not replace the destination");
+}
+
+func TestWindowsReadDirDriveRelative(t *testing.T) {
+    if (os.OS() != "windows") t.Skip("requires Windows");
+    drive := os.WindowsLookupEnv("SystemDrive").unwrap();
+    entries := os.WindowsReadDir(drive).unwrap();
+    expected := os.WindowsReadDir(drive+".").unwrap();
+    if (len(entries) != len(expected)) t.Fatal("bare drive should list the drive's current directory");
+    for (i := 0; i < len(entries); i++) {
+        if (entries[i].Name != expected[i].Name || entries[i].Directory != expected[i].Directory) {
+            t.Fatal("bare drive should list the drive's current directory");
+        }
+    }
+}
+
+func TestWindowsStatUNCShareRoot(t *testing.T) {
+    if (os.OS() != "windows") t.Skip("requires Windows");
+    share := os.WindowsLookupEnv("OCEAN_TEST_UNC_SHARE");
+    if (share.hasError()) t.Skip("set OCEAN_TEST_UNC_SHARE to an accessible UNC share root");
+    path := share.unwrap();
+    info := os.WindowsStat(path).unwrap();
+    if (!info.Exists || !info.Directory) t.Fatal("expected UNC share root to be a directory");
+}
+
+func writeFile(path string, contents string) {
+    file := os.Open(path,os.FileMode.Write).unwrap();
+    defer file.Close();
+    file.Write(contents).unwrap();
+}

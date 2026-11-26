@@ -1,10 +1,10 @@
 # Ocean-src
 
 The standard library for the [Ocean programming language](https://ocean-lang.dev).
-Use this source tree with the matching `ocean-c` compiler (`OCEAN_SRC` selects it).
+Use this source tree with the matching `ocean` compiler (`OCEAN_SRC` selects it).
 It is loaded as Ocean source; do not precompile it.
 
-Nightly releases are coordinated by `ocean-c` every day at 00:00 UTC using both
+Nightly releases are coordinated by the `ocean` compiler repository every day at 00:00 UTC using both
 repositories' `main` commits. A change in either repository creates matching
 `nightly-YYYY.MM.DD` tags dated for the preceding UTC day and builds the release
 (for example, the December 1 run is named for November 30). Unchanged sources skip builds
@@ -52,6 +52,28 @@ The OS interfaces follow the [Linux syscall ABI](https://man7.org/linux/man-page
 and Microsoft's [GetStdHandle](https://learn.microsoft.com/en-us/windows/console/getstdhandle)
 and [WriteFile](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile)
 contracts.
+
+## Target platform and Windows paths
+
+`os.OS()` and `os.Arch()` report the program's target. OS names include `linux`,
+`macos`, and `windows`. Architecture names include `x86_64`, `aarch64`, and
+`riscv64`. A JavaScript-hosted WebAssembly build reports `js` and `wasm`.
+`os.ExeSuffix()`, `os.PathSeparator()` and `os.PathListSeparator()` give the
+target's executable suffix and separators. Other standard-library packages use
+`os.OS()` rather than their own detection code.
+
+Windows-specific functions use Unicode paths and return an error on other targets.
+
+- `os.WindowsKnownFolder(id)` resolves the filesystem path for a Windows
+  [known-folder GUID](https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid)
+  for the current user. It accepts GUIDs with or without braces and follows folder
+  redirection. An unavailable or virtual folder without a path returns an error.
+- `os.WindowsLookupEnv(name)` reads a Unicode environment variable.
+- `os.WindowsStat(path)` reports whether a path exists and whether it is a directory.
+- `os.WindowsMkdir(path)` creates a directory under an existing parent.
+- `os.WindowsReadDir(path)` lists names and directory attributes in filesystem order.
+- `os.WindowsRename(from, to)` moves a file on the same volume and replaces an existing file.
+- `os.WindowsRemove(path)` deletes a file or an empty directory.
 
 ## Input scanning and files
 
@@ -157,7 +179,7 @@ Construct a present value with `Optional<int>.value(42)` and an absent value
 with `Optional<int>.none`. The former `Some` and `None` variant names are no
 longer supported. Uninitialized optionals and `zero(Optional<T>)` are `none`.
 Assigning `null` selects `none`, which compares equal to `null`.
-`Optional<*int>.value(null)` is still present.
+`Optional<*int>.value(zero(*int))` and `Optional<any>.value(null)` are still present; raw `*T` and unsized `buffer<T>` are non-nullable (use `Optional<*T>` or `Optional<buffer<T>>`).
 
 `hasValue() bool` returns true for `value` and false for `none`.
 `unwrap() T` returns the present payload and panics on `none`, attributed to
@@ -197,8 +219,7 @@ A user-declared Result may shadow the built-in name and remains a distinct type.
 `unwrapOrElse` accepts a value, not a callback; its argument is evaluated with
 normal function-call rules even when the Result holds a value. Payloads and
 fallbacks retain ordinary value-copy and ownership behavior. `zero(T)` follows
-Ocean's existing zero semantics, including a zero-address pointer distinct from
-explicit `null`.
+Ocean's existing zero semantics, including the zero-address pointer `zero(*T)` (`0x0`).
 
 ```ocean
 package main;
@@ -294,6 +315,41 @@ architectures; portable Ocean routines cover the remaining paths.
 These packages use `Result<T>` for recoverable errors. See each package's README
 for its supported subset of the Go APIs. `io.FormatFloat(value float) string`
 provides locale-independent round-trip float formatting used by JSON.
-The matching compiler needs interface-array/enum ownership fixes, libcurl
-linking (including object-cache hits), and native/Wasm source-file selection. Run `ocean test ./...` to run all
-standard-library tests; HTTP tests need loopback socket access.
+Run `OCEAN_SRC="$PWD" ocean test ./... --notty` from this checkout. The HTTP
+integration tests use local loopback servers. [HTTP validation](net/http/README.md#validation)
+
+## Files, directories and the environment
+
+`os` also provides path-based file-system operations, each returning a `Result`
+whose error names the operation, the path and the system's reason (for example
+`os: mkdir data: File exists`): `Stat`/`Lstat` (`FileInfo` with `Name`, `Size`,
+`Mode`, `ModTime` in Unix nanoseconds, and `IsDir`/`IsRegular`/`IsSymlink`/`Perm`),
+`Exists`, `IsDir`, `ListDir` (sorted names), `Mkdir`, `MkdirAll`, `Remove`,
+`RemoveAll` (does not follow links; a missing path succeeds), `Rename`, `Chmod`,
+`Getwd`, `Chdir`, `Realpath`, `Executable`, `TempDir`, `MkdirTemp`, `CreateTemp`,
+`ReadFile` and `WriteFile`. Environment access is `Getenv`, `LookupEnv`,
+`Setenv` and `Unsetenv`; `Getpid` returns the process ID.
+
+On POSIX, `Getenv`, `LookupEnv`, `Setenv`, and `Unsetenv` coordinate through
+an internal lock. Programs that also access the environment through native
+code must coordinate those accesses separately.
+
+`RemoveAll` may leave a partially deleted tree on error. On POSIX, coordinate
+with other writers to keep the tree and its path components stable throughout
+deletion. The final system call removes a name relative to an open parent
+directory.
+
+Use `StageRemoval(path, stagingDir)` to move an entry before deleting it.
+On Linux, macOS, and Windows it uses a single same-filesystem rename into a
+unique private slot. Supply an existing, trusted staging directory with a
+stable path. The result is the slot's absolute path, or an empty string if
+the source was missing. The slot contains the moved item as `entry`. Call
+`RemoveAll(slot)` to clean up and keep the slot path if cleanup needs a retry. A replacement created at the original
+path after the move is outside that cleanup. Writers with existing access
+inside the moved tree still need coordination if its contents must stay stable.
+
+These call the C library or Win32 through `internal/native` (UTF-16 wide APIs
+on Windows, so any Unicode path works). On Wasm they return errors.
+
+Other packages: `strings`, `strconv`, `sort`, `unicode`, `unicode/utf8`, `path`
+and `os/signal`, each documented in its directory's README.

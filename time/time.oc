@@ -60,32 +60,34 @@ func Sleep(nanoseconds int) {
                 mov ${status}, rax
             }
             asm aarch64/macos {
-                ldr x19, ${request}
-                ldr x20, ${rest}
+                ldr x0, ${request}
+                ldr x1, ${rest}
                 sub sp, sp, #64
                 stp x9, x10, [sp]
                 stp x11, x12, [sp, #16]
                 stp x13, x14, [sp, #32]
-                str x15, [sp, #48]
-                mov x0, x19
-                mov x1, x20
+                stp x15, x30, [sp, #48]
                 bl _nanosleep
                 cbz w0, 1f
                 bl ___error
                 ldr w0, [x0]
                 neg w0, w0
                 1:
-                sxtw x21, w0
+                sxtw x0, w0
                 ldp x9, x10, [sp]
                 ldp x11, x12, [sp, #16]
                 ldp x13, x14, [sp, #32]
-                ldr x15, [sp, #48]
+                ldp x15, x30, [sp, #48]
                 add sp, sp, #64
-                str x21, ${status}
+                str x0, ${status}
             }
             asm x86_64/windows {
-                mov r13, ${ticks}
-                sub rsp, 80
+                mov rax, ${ticks}
+                sub rsp, 96
+                mov [rsp + 72], r12
+                mov [rsp + 80], r13
+                mov [rsp + 88], r14
+                mov r13, rax
                 xor ecx, ecx
                 mov edx, 1
                 xor r8d, r8d
@@ -117,16 +119,22 @@ func Sleep(nanoseconds int) {
                 jnz 4f
                 3: mov r14, -1
                 4:
-                add rsp, 80
-                mov ${status}, r14
+                mov rax, r14
+                mov r12, [rsp + 72]
+                mov r13, [rsp + 80]
+                mov r14, [rsp + 88]
+                add rsp, 96
+                mov ${status}, rax
             }
             asm aarch64/windows {
-                ldr x19, ${ticks}
-                sub sp, sp, #80
+                ldr x0, ${ticks}
+                sub sp, sp, #96
                 stp x9, x10, [sp]
                 stp x11, x12, [sp, #16]
                 stp x13, x14, [sp, #32]
-                str x15, [sp, #48]
+                stp x15, x30, [sp, #48]
+                stp x20, x21, [sp, #64]
+                str x0, [sp, #80]
                 mov x0, #0
                 mov w1, #1
                 mov x2, #0
@@ -134,9 +142,8 @@ func Sleep(nanoseconds int) {
                 mov x20, x0
                 mov x21, #-1
                 cbz x0, 3f
-                str x19, [sp, #64]
                 mov x0, x20
-                add x1, sp, #64
+                add x1, sp, #80
                 mov w2, #0
                 mov x3, #0
                 mov x4, #0
@@ -157,9 +164,11 @@ func Sleep(nanoseconds int) {
                 ldp x9, x10, [sp]
                 ldp x11, x12, [sp, #16]
                 ldp x13, x14, [sp, #32]
-                ldr x15, [sp, #48]
-                add sp, sp, #80
-                str x21, ${status}
+                ldp x15, x30, [sp, #48]
+                mov x0, x21
+                ldp x20, x21, [sp, #64]
+                add sp, sp, #96
+                str x0, ${status}
             }
             if (status == 0) break;
             if (status == -4) { requested = remaining; continue; }

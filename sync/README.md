@@ -7,8 +7,8 @@ it acquires a mutex or returns from the corresponding wait.
 
 | Type | Methods |
 | --- | --- |
-| `Mutex` | `Lock()`, `Unlock()`, `TryLock() bool` |
-| `WaitGroup` | `Add(delta int)`, `Done()`, `Wait()` |
+| `Mutex` | `Lock()`, `Unlock()`, `TryLock() bool`, `Destroy()`, `Close()` |
+| `WaitGroup` | `Add(delta int)`, `Done()`, `Wait()`, `Destroy()`, `Close()` |
 
 Mutexes are nonrecursive. Lock blocks until it can acquire ownership; TryLock
 reports success without waiting for ownership. Unlocking an unlocked mutex
@@ -22,7 +22,10 @@ starting a new group while previous Wait calls are returning panic. Reuse only
 after every preceding Wait has returned. Register deferred Done for each task
 so thread termination does not leave unfinished work.
 
-Native state is lazily initialized and retained until process shutdown. Linux
-and macOS use pthreads; Windows uses Win32 synchronization. Wasm compilation
-fails. Mutex and wait-group waits can be interrupted by threads.Kill, which
-runs deferred cleanup before terminating the caller.
+Native state is lazily initialized. Call `Destroy()` or `Close()` after all
+threads have finished using the object. Closing an already closed object or
+calling another operation on it panics. Process shutdown cleans up any
+objects that are still open. Linux and macOS use pthreads. Windows uses
+Win32 synchronization. Wasm compilation fails. Mutex
+and wait-group waits can be interrupted by threads.Kill, which runs deferred
+cleanup before terminating the caller.

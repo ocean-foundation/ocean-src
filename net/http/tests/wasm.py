@@ -1,6 +1,5 @@
 """Compile and execute HTTP's host-transport API under JavaScript/Wasm.
-Only the small test C-runtime shim is provided here; it is not a production
-Ocean JavaScript runtime or an asynchronous Fetch adapter.
+The JavaScript fixture supplies any runtime imports needed by the module.
 """
 from pathlib import Path
 import os
@@ -54,8 +53,10 @@ func main() int {
         assert validated.returncode==0,(validated.stdout,validated.stderr)
         cached_modules.append(module.read_bytes())
     build('check',source)
-    build('build',stdlib/'net/http','-o',root/'http.o')
+    # Exercise the standalone library through the uncached build path. The
+    # cached executable builds above exercise reuse of a finished Wasm module.
     env['OCEAN_BUILD_CACHE']='off'
+    build('build',stdlib/'net/http','-o',root/'http.o')
     build('build',source,'-o',module)
     script=root/'run.cjs'
     script.write_text(r'''
@@ -84,6 +85,7 @@ const env={
   dprintf(){throw Error('unexpected diagnostic');},
   exit(c){throw Error('unexpected exit '+c);},
   write(fd,p,n){return BigInt(n);},
+  ocean_write(fd,p,n){return n;},
   __cxa_atexit(){return 0;}
 };
 for(const item of imports)if(!(item.name in env))throw Error('unimplemented test runtime import '+item.name);

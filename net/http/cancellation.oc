@@ -9,7 +9,7 @@ func NewRequestWithCancel(cancel *Cancellation, method string, url string, body 
     return Result<Request>.value(result.unwrap().WithCancel(cancel));
 }
 func interruption(cancel *Cancellation, deadline int) string {
-    if ((cancel -> int) != 0 && cancel != null && cancel.Canceled()) return "http: request canceled";
+    if (cancel != zero(*Cancellation) && cancel.Canceled()) return "http: request canceled";
     if (deadline > 0 && time.Monotonic() >= deadline) return "http: timeout exceeded";
     return "";
 }

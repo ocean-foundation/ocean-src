@@ -1,0 +1,47 @@
+package os;
+
+// OS returns the target operating system: linux, macos, windows, or unknown.
+func OS() string {
+    platform := 0;
+    asm x86_64/linux { mov qword ptr ${platform}, 1 }
+    asm aarch64/linux {
+        mov x0, #1
+        str x0, ${platform}
+    }
+    asm riscv64/linux {
+        li a0, 1
+        sd a0, ${platform}
+    }
+    asm x86_64/macos { mov qword ptr ${platform}, 2 }
+    asm aarch64/macos {
+        mov x0, #2
+        str x0, ${platform}
+    }
+    asm x86_64/windows { mov qword ptr ${platform}, 3 }
+    asm aarch64/windows {
+        mov x0, #3
+        str x0, ${platform}
+    }
+    if (platform == 1) return "linux";
+    if (platform == 2) return "macos";
+    if (platform == 3) return "windows";
+    return "unknown";
+}
+
+// Arch returns the target architecture: x86_64, aarch64, riscv64, or unknown.
+func Arch() string {
+    architecture := 0;
+    asm x86_64 { mov qword ptr ${architecture}, 1 }
+    asm aarch64 {
+        mov x0, #2
+        str x0, ${architecture}
+    }
+    asm riscv64 {
+        li a0, 3
+        sd a0, ${architecture}
+    }
+    if (architecture == 1) return "x86_64";
+    if (architecture == 2) return "aarch64";
+    if (architecture == 3) return "riscv64";
+    return "unknown";
+}

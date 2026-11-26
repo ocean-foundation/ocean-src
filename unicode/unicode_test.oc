@@ -1,0 +1,33 @@
+package unicode_test;
+
+import "testing";
+import "unicode";
+
+func TestCategories(t *testing.T) {
+    if (!unicode.IsLetter('a') || !unicode.IsLetter('é') || !unicode.IsLetter('日') || unicode.IsLetter('1') || unicode.IsLetter(' ')) t.Error("IsLetter");
+    if (!unicode.IsUpper('Ä') || unicode.IsUpper('ä') || !unicode.IsLower('ä') || !unicode.IsLower('σ')) t.Error("IsUpper/IsLower");
+    if (!unicode.IsTitle(453) || unicode.IsTitle('A')) t.Error("IsTitle"); // U+01C5 Dž
+    if (!unicode.IsDigit('7') || !unicode.IsDigit(1637) || unicode.IsDigit('½')) t.Error("IsDigit"); // U+0665 Arabic-Indic five
+    if (!unicode.IsNumber('½') || !unicode.IsNumber(8547)) t.Error("IsNumber"); // U+2163 Roman numeral four
+    if (!unicode.IsPunct('!') || !unicode.IsPunct('¿') || unicode.IsPunct('+')) t.Error("IsPunct");
+    if (!unicode.IsSymbol('+') || !unicode.IsSymbol('€') || unicode.IsSymbol('a')) t.Error("IsSymbol");
+    if (!unicode.IsMark(769) || unicode.IsMark('a')) t.Error("IsMark"); // combining acute accent
+    if (!unicode.IsControl(0) || !unicode.IsControl(127) || unicode.IsControl('a')) t.Error("IsControl");
+    if (!unicode.IsSpace(' ') || !unicode.IsSpace('\n') || !unicode.IsSpace(12288) || unicode.IsSpace(8203)) t.Error("IsSpace"); // U+3000 yes, U+200B no
+    if (!unicode.IsPrint('a') || !unicode.IsPrint(' ') || unicode.IsPrint('\t')) t.Error("IsPrint");
+    if (unicode.IsLetter(-1) || unicode.IsLetter(unicode.MaxRune + 1)) t.Error("invalid code points");
+}
+
+func TestIdentifiers(t *testing.T) {
+    if (!unicode.IsIdentStart('_') || !unicode.IsIdentStart('Ω') || unicode.IsIdentStart('3')) t.Error("IsIdentStart");
+    if (!unicode.IsIdentContinue('3') || !unicode.IsIdentContinue(769) || unicode.IsIdentContinue('-')) t.Error("IsIdentContinue");
+}
+
+func TestCaseMapping(t *testing.T) {
+    if (unicode.ToUpper('a') != 'A' || unicode.ToUpper('é') != 'É' || unicode.ToUpper('σ') != 'Σ' || unicode.ToUpper('1') != '1') t.Error("ToUpper");
+    if (unicode.ToLower('A') != 'a' || unicode.ToLower('Ā') != 'ā' || unicode.ToLower('ā') != 'ā' || unicode.ToLower('Ω') != 'ω') t.Error("ToLower");
+    if (unicode.ToUpper('ß') != 'ß') t.Error("ToUpper has no one-to-one mapping for ß");
+    if (unicode.ToUpper(0x1F80) != 0x1F88) t.Error("ToUpper U+1F80");
+    if (unicode.ToLower(304) != 'i') t.Error("ToLower U+0130");
+    if (unicode.ToUpper(66560 + 40) != 66560) t.Error("ToUpper Deseret"); // U+10428 -> U+10400
+}

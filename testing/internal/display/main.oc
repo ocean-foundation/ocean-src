@@ -6,32 +6,22 @@ import "time";
 import "io";
 import "os";
 
-struct pollDescriptor { fd i32; events i16; ready i16; }
-extern i32 poll(*pollDescriptor descriptors, uint count, i32 timeout);
-extern int read(i32 fd, buffer<i8> data, uint count);
-struct clockValue { seconds int; nanos int; }
-extern i32 timespec_get(*clockValue value, i32 base);
-func now() int {
-    value: clockValue;
-    extern.timespec_get(&value, 1->i32);
-    return value.seconds * 1000000000 + value.nanos;
-}
+func now() int { return time.Monotonic(); }
 struct chunkMsg { text string; }
 struct endMsg {}
 struct tickMsg {}
 struct clearMsg {}
 struct finishMsg {}
-func readEvents() tui.Msg {
-    descriptor := pollDescriptor{197->i32, 1->i16, 0->i16};
-    ready := extern.poll(&descriptor, 1->uint, 50->i32);
-    if (ready < 0) return endMsg{};
-    if (ready == 0) return chunkMsg{""};
-    bytes: [4096]i8;
-    count := extern.read(197->i32, bytes.data, 4096->uint);
-    if (count <= 0) return endMsg{};
-    text := []i8{};
-    for (i := 0; i < count; i++) text.append(bytes[i]);
-    return chunkMsg{text->string};
+func readEvents(file os.File) tui.Msg {
+    ready := file.PollRead();
+    if (ready.hasError()) return endMsg{};
+    if (ready.unwrap() == 0) {
+        time.Sleep(10 * time.Millisecond);
+        return chunkMsg{""};
+    }
+    bytes := file.Readchunk(ready.unwrap());
+    if (bytes.hasError() || len(bytes.unwrap()) == 0) return endMsg{};
+    return chunkMsg{bytes.unwrap()->string};
 }
 func split(text string, delimiter i8) []string {
     result := []string{};
@@ -56,6 +46,7 @@ func unhex(text string) string {
 }
 struct testRow { label string; packageRow bool; depth int; name string; status string; output string; start int; elapsed float; }
 struct display {
+    events os.File;
     packageName string;
     color bool;
     showSkipped bool;
@@ -78,7 +69,11 @@ struct display {
 }
 func (model *display) Init() tui.Cmd {
     model.started = now();
-    return tui.Batch(readEvents, tui.Tick(80 * time.Millisecond, tickMsg{}));
+    return tui.Batch(model.readCommand(), tui.Tick(80 * time.Millisecond, tickMsg{}));
+}
+func (model *display) readCommand() tui.Cmd {
+    file := model.events;
+    return func() tui.Msg { return readEvents(file); };
 }
 // Slash boundaries define ancestry: TestOneMore is not a child of TestOne.
 func descendant(name string, parent string) bool {
@@ -148,12 +143,13 @@ func (model *display) accept(line string) {
 func (model *display) Update(message tui.Msg) (tui.Model, tui.Cmd) {
     switch (value := message.(type)) {
         case chunkMsg:
+            if (len(value.text) == 0) return model, model.readCommand();
             model.pending += value.text;
             lines := split(model.pending, '\n');
             for (i := 0; i + 1 < len(lines); i++) model.accept(lines[i]);
             model.pending = lines[len(lines) - 1];
             if (model.finished) return model, tui.Tick(40 * time.Millisecond, clearMsg{});
-            return model, readEvents;
+            return model, model.readCommand();
         case tickMsg:
             model.frame++;
             if (!model.finished && !model.cleared) return model, tui.Tick(80 * time.Millisecond, tickMsg{});
@@ -307,7 +303,9 @@ func (model *display) View() string {
 func main() int {
     args := os.Args();
     if (len(args) != 4) return 2;
-    model := display{packageName: args[1], color: args[2] == "1", showSkipped: args[3] == "1", width: 80, height: 24, follow: true};
+    events := os.FromDescriptor(197, true, false);
+    defer events.Close();
+    model := display{events: events, packageName: args[1], color: args[2] == "1", showSkipped: args[3] == "1", width: 80, height: 24, follow: true};
     program := tui.NewProgram(&model);
     result := program.Run();
     if (result == Result<tui.Model>.error) { io.Println("ocean test: live display: ", result.(Result<tui.Model>.error)); return 2; }

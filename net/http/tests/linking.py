@@ -1,4 +1,4 @@
-"""Verify libcurl link requirements survive check, library builds and cache hits."""
+"""Verify libcurl dependencies in cold, cached and uncached executable builds."""
 from pathlib import Path
 import os
 import subprocess
@@ -36,27 +36,33 @@ func main() int {
             raise
         print('DONE linking:', args[0], 'exit=', p.returncode, 'elapsed=', round(time.monotonic()-started, 2), flush=True)
         assert p.returncode == 0, (args,p.stdout,p.stderr)
+        return p.stdout
+
+    def links_curl():
+        if sys.platform == 'darwin':
+            imports = run('otool', '-L', binary)
+        elif os.name == 'nt':
+            imports = run('llvm-objdump', '-p', binary)
+        else:
+            imports = run('readelf', '-d', binary)
+        return 'libcurl' in imports.lower()
+
     for _ in range(2):
         run(compiler, 'build', source, '-o', binary)
         run(binary)
+        assert links_curl()
+        binary.unlink()
     run(compiler, 'check', source)
     run(compiler, 'build', stdlib/'net/http', '-o', root/'http.o')
     env['OCEAN_BUILD_CACHE']='off'
     run(compiler, 'build', source, '-o', binary)
     run(binary)
-    # Link metadata must opt in to curl, not make it a universal dependency.
-    def metadata(cache):
-        result=[]
-        for path in (cache/'v1/data').glob('*/*'):
-            data=path.read_bytes()
-            if len(data)==4 and all(byte in b'01' for byte in data): result.append(data)
-        return result
-    assert any(flags[2:3]==b'1' for flags in metadata(root/'cache'))
+    assert links_curl()
     source.write_text('package main; func main() int { return 0; }')
     env['OCEAN_BUILD_CACHE']=str(root/'plain-cache')
-    run(compiler, 'build', source, '-o', binary)
-    run(binary)
-    run(compiler, 'build', source, '-o', binary)
-    plain=metadata(root/'plain-cache')
-    assert plain and all(flags[2:3]==b'0' for flags in plain)
-print('HTTP cold/hot/uncached linking and no-curl metadata for unrelated programs passed')
+    for _ in range(2):
+        run(compiler, 'build', source, '-o', binary)
+        run(binary)
+        assert not links_curl()
+        binary.unlink()
+print('HTTP cold, hot and uncached linking passed. Unrelated programs do not link libcurl.')

@@ -13,7 +13,7 @@ struct childTask { id int; test *T; }
 struct testJob { name string; callback func(*T); }
 struct T {
     gate sync.Mutex;
-    parent *T;
+    parent Optional<*T>;
     pending []childTask;
     cleaning bool;
     signaled bool;
@@ -133,7 +133,7 @@ func acquire(t *T) {
 func release(t *T) {
     if (t.slot) { t.slot = false; event("release", "", "", 0); }
 }
-func releaseChild(child childTask) { threads.Await(child.id); free(child.test); }
+func releaseChild(child childTask) { threads.Await(child.id); child.test.gate.Destroy(); free(child.test); }
 func finish(t *T) {
     t.gate.Lock(); t.childrenReady = true; hasChildren := len(t.pending) > 0; t.gate.Unlock();
     if (hasChildren) release(t);
@@ -149,7 +149,7 @@ func finish(t *T) {
 func report(t *T, start int) {
     failed := t.Failed();
     if (failed) {
-        if (t.parent != null) t.parent.Fail();
+        if (t.parent.hasValue()) t.parent.unwrap().Fail();
         else { poolGate.Lock(); failures++; poolGate.Unlock(); }
     }
     event(failed ? "fail" : (t.Skipped() ? "skip" : "pass"), t.name, "", now() - start - t.paused);
@@ -171,10 +171,10 @@ func execute(t *T, callback func(*T)) {
     }();
     callback(t);
 }
-func (t *T) newChild(name string) *T {
+func (t *T) newChild(name string) Optional<*T> {
     t.gate.Lock();
     if (t.cleaning) {
-        t.gate.Unlock(); t.Error("cannot start a subtest during cleanup"); return null;
+        t.gate.Unlock(); t.Error("cannot start a subtest during cleanup"); return Optional<*T>.none;
     }
     if (name == "") name = "#00";
     base := name;
@@ -186,12 +186,13 @@ func (t *T) newChild(name string) *T {
     t.gate.Unlock();
     child := new(T);
     child.name = t.name + "/" + name;
-    child.parent = t;
-    return child;
+    child.parent = Optional<*T>.value(t);
+    return Optional<*T>.value(child);
 }
 func (t *T) Run(name string, callback func(*T)) bool {
-    child := t.newChild(name);
-    if (child == null) return false;
+    maybeChild := t.newChild(name);
+    if (!maybeChild.hasValue()) return false;
+    child := maybeChild.unwrap();
     release(t);
     id := threads.Spawn(func() { execute(child, callback); });
     t.gate.Lock(); t.pending.append(childTask{id, child}); t.gate.Unlock();
@@ -214,8 +215,8 @@ func (t *T) Parallel() {
     t.gate.Lock(); t.signaled = true; t.gate.Unlock();
     for (;;) {
         ready := false;
-        if (t.parent == null) { poolGate.Lock(); ready = serialDone; poolGate.Unlock(); }
-        else { t.parent.gate.Lock(); ready = t.parent.childrenReady; t.parent.gate.Unlock(); }
+        if (!t.parent.hasValue()) { poolGate.Lock(); ready = serialDone; poolGate.Unlock(); }
+        else { parent := t.parent.unwrap(); parent.gate.Lock(); ready = parent.childrenReady; parent.gate.Unlock(); }
         if (ready) break;
         time.Sleep(time.Millisecond);
     }
@@ -246,7 +247,7 @@ func Finish() int {
     tasks := []childTask{};
     for (i := 0; i < len(jobs); i++) {
         job := jobs[i];
-        t := new(T); t.name = job.name; t.parent = null;
+        t := new(T); t.name = job.name; t.parent = Optional<*T>.none;
         id := threads.Spawn(func() { execute(t, job.callback); });
         tasks.append(childTask{id, t});
         for (;;) {

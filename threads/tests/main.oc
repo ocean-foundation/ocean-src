@@ -90,6 +90,12 @@ func returned(done *sync.WaitGroup, depth int) {
 }
 unexpected := false;
 func rescue() { recover(); }
+func awaitTarget(target int, mu *sync.Mutex, succeeded *int) {
+    threads.Await(target);
+    mu.Lock();
+    *succeeded = *succeeded + 1;
+    mu.Unlock();
+}
 func returnFromDefer(done *sync.WaitGroup) {
     defer done.Done();
     defer threads.Return();
@@ -105,6 +111,10 @@ func invalid(operation int) {
     if (operation == 6) { group: sync.WaitGroup; group.Done(); }
     if (operation == 7) { group: sync.WaitGroup; group.Add(9223372036854775807); group.Add(1); }
     if (operation == 8) { job: func(); threads.Spawn(job); }
+    if (operation == 9) { mutex: sync.Mutex; mutex.Destroy(); mutex.Close(); }
+    if (operation == 10) { group: sync.WaitGroup; group.Close(); group.Destroy(); }
+    if (operation == 11) { mutex: sync.Mutex; mutex.Close(); mutex.Lock(); }
+    if (operation == 12) { group: sync.WaitGroup; group.Close(); group.Add(1); }
     unexpected = true;
 }
 func main() {
@@ -184,9 +194,11 @@ func main() {
         unlocked := threads.Spawn(func() { mutex.Unlock(); });
         threads.Await(unlocked);
         require(mutex.TryLock()); mutex.Unlock();
+        mutex.Destroy();
         done.Add(1);
         id := threads.Spawn(func() { done.Done(); });
         done.Wait(); threads.Await(id);
+        done.Destroy();
     }
     if (mode == "return") {
         done: sync.WaitGroup;
@@ -262,12 +274,18 @@ func main() {
     if (mode == "awaiters") {
         gate: sync.WaitGroup;
         gate.Add(1);
+        mu: sync.Mutex;
+        succeeded := 0;
         target := threads.Spawn(func() { gate.Wait(); });
         ids := []int{};
-        for (i := 0; i < 8; i++) ids.append(threads.Spawn(func() { threads.Await(target); }));
+        for (i := 0; i < 8; i++) ids.append(threads.Spawn(func() { awaitTarget(target, &mu, &succeeded); }));
         gate.Done();
         for (index, id := range ids) threads.Await(id);
+        require(succeeded == 8);
         threads.Await(target);
+        require(threads.IsDone(target));
+        gate.Destroy();
+        mu.Destroy();
     }
     if (mode == "closures") {
         ids := []int{};
@@ -280,6 +298,6 @@ func main() {
         }));
         for (index, id := range ids) threads.Await(id);
     }
-    if (mode == "invalid") for (i := 0; i < 9; i++) { invalid(i); require(!unexpected); }
+    if (mode == "invalid") for (i := 0; i < 13; i++) { invalid(i); require(!unexpected); }
     io.Println("OK").unwrap();
 }
