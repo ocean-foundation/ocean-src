@@ -29,10 +29,9 @@ ocean build --emit-llvm -o /tmp/native-aarch64.ll .
 clang --target=aarch64-unknown-linux-gnu -c -O1 -x ir /tmp/native-aarch64.ll -o /tmp/native-aarch64.o
 ```
 
-For foreign assembly checks, build `asm_backend_probe` from the pinned
-`ocean-c` checkout and run the same driver used by CI from the standard-library
-repository root:
+To compile the monotonic clock for all seven native targets, run the CI
+check from the standard-library checkout with Ocean and a multi-target Clang.
 
 ```sh
-python3 net/http/tests/assembly.py /path/to/asm_backend_probe "$(command -v clang)"
+python3 net/http/tests/assembly.py /path/to/ocean "$(command -v clang)"
 ```

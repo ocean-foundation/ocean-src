@@ -16,4 +16,5 @@ Model tests can run without a terminal:
 OCEAN_SRC=/path/to/ocean-src ocean test /path/to/ocean-src/testing/internal/display --notty
 ```
 
-The compiler's `tests/ocean_test_tui_test.py` tests the complete PTY integration.
+The compiler launches the live display on POSIX hosts. On Windows,
+`ocean test` uses the final text report.

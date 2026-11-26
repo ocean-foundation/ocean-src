@@ -1,6 +1,6 @@
 """Local fixture launcher for Ocean's integration_native_test.oc tests.
 All behavior assertions are native Ocean unit tests; Python owns servers/certs.
-Usage: python integration.py /path/to/ocean-c [--cache DIR]
+Usage: python integration.py /path/to/ocean [--cache DIR]
 Requires Python 3.10+, openssl, libcurl 7.68+ with TLS + async DNS, and Clang.
 """
 import argparse

@@ -8,6 +8,7 @@ import select
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import termios
 import time
@@ -74,7 +75,12 @@ def terminal(executable, mode):
             expect(b"VIEW:100")
             os.write(master, b"q")
             assert process.wait(timeout=8) == 0, process.stderr.read()
-        assert termios.tcgetattr(slave) == original, "terminal was not restored"
+        restored = termios.tcgetattr(slave)
+        if sys.platform == "darwin":
+            # Darwin sets PENDIN when queued input needs reprocessing in canonical mode.
+            restored[3] &= ~termios.PENDIN
+            original[3] &= ~termios.PENDIN
+        assert restored == original, ("terminal was not restored", mode, restored, original)
         # Drain cleanup bytes after process completion.
         while select.select([master], [], [], 0)[0]:
             received += os.read(master, 65536)
@@ -86,6 +92,32 @@ def terminal(executable, mode):
         if process.poll() is None:
             process.kill()
             process.wait()
+        os.close(master)
+        os.close(slave)
+
+
+def live_test_display(env):
+    master, slave = pty.openpty()
+    try:
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
+        with subprocess.Popen(
+            [COMPILER, "test", str(ROOT / "term/tui"), "--timeout", "30s"],
+            stdin=slave, stdout=slave, stderr=slave, env=dict(env, TERM="xterm-256color"),
+        ) as process:
+            output = bytearray()
+            deadline = time.monotonic() + 40
+            try:
+                while time.monotonic() < deadline:
+                    if select.select([master], [], [], 0.1)[0]:
+                        output.extend(os.read(master, 65536))
+                    elif process.poll() is not None:
+                        break
+                assert process.wait(timeout=1) == 0, output[-4096:]
+                assert b"TestMouseReports" in output and b"Summary" in output, output[-4096:]
+            finally:
+                if process.poll() is None:
+                    process.kill()
+    finally:
         os.close(master)
         os.close(slave)
 
@@ -115,7 +147,8 @@ def main():
         failed = subprocess.run([executable, "terminal"], stdin=subprocess.DEVNULL, capture_output=True, timeout=10)
         assert failed.returncode == 1 and b"tui output must be a terminal" in failed.stderr
         run(COMPILER, "check", str(ROOT / "term/tui/examples/counter"), env=env)
-    print("tui command, model interface, I/O, cancellation, and PTY tests passed")
+        live_test_display(env)
+    print("tui command, model interface, I/O, cancellation, PTY, and test display checks passed")
 
 
 if __name__ == "__main__":
