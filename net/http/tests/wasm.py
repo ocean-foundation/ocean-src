@@ -1,6 +1,5 @@
 """Compile and execute HTTP's host-transport API under JavaScript/Wasm.
-Only the small test C-runtime shim is provided here; it is not a production
-Ocean JavaScript runtime or an asynchronous Fetch adapter.
+The JavaScript fixture supplies any runtime imports needed by the module.
 """
 from pathlib import Path
 import os
@@ -55,7 +54,7 @@ func main() int {
         cached_modules.append(module.read_bytes())
     build('check',source)
     # Exercise the standalone library through the uncached build path. The
-    # cached executable builds above cover Wasm package-cache reuse.
+    # cached executable builds above exercise reuse of a finished Wasm module.
     env['OCEAN_BUILD_CACHE']='off'
     build('build',stdlib/'net/http','-o',root/'http.o')
     build('build',source,'-o',module)

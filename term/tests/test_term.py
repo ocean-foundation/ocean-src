@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Linux PTY integration tests. Run: python3 term/tests/test_term.py"""
+"""POSIX PTY integration tests. Run: python3 term/tests/test_term.py"""
 import fcntl
 import os
 from pathlib import Path
@@ -8,11 +8,20 @@ import select
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import time
 import termios
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def settings(slave):
+    state = termios.tcgetattr(slave)
+    if sys.platform == "darwin":
+        # Darwin sets PENDIN when queued input needs reprocessing in canonical mode.
+        state[3] &= ~termios.PENDIN
+    return state
 
 
 def line(process, expected):
@@ -30,24 +39,24 @@ def drain(master):
 
 def terminal_test(executable, mode):
     master, slave = pty.openpty()
-    original = termios.tcgetattr(slave)
+    original = settings(slave)
     # Exercise preservation of settings that differ from the usual defaults.
     original[6][termios.VMIN] = 3
     original[6][termios.VTIME] = 2
     termios.tcsetattr(slave, termios.TCSANOW, original)
-    original = termios.tcgetattr(slave)
+    original = settings(slave)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 37, 101, 0, 0))
     process = subprocess.Popen([executable, mode], stdin=slave, stdout=subprocess.PIPE, bufsize=0)
     try:
         line(process, "RAW")
-        raw = termios.tcgetattr(slave)
+        raw = settings(slave)
         assert not raw[3] & (termios.ICANON | termios.ECHO | termios.ISIG | termios.IEXTEN)
         assert not raw[1] & termios.OPOST
         assert raw[6][termios.VMIN] == 1 and raw[6][termios.VTIME] == 0
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         os.write(master, b"x")
         line(process, "RESTORED")
-        assert termios.tcgetattr(slave) == original, (termios.tcgetattr(slave), original)
+        assert settings(slave) == original, (settings(slave), original)
         os.write(master, b"\n")
         line(process, "PASSWORD")
         # ReadPassword switches echo off after printing PASSWORD; wait for it.
@@ -59,11 +68,11 @@ def terminal_test(executable, mode):
         os.write(master, b"secrex\x7ft\n")  # canonical erase still works
         line(process, "READ")
         assert drain(master) == b"", "password was echoed"
-        assert termios.tcgetattr(slave) == (raw if mode == "password-raw" else original)
+        assert settings(slave) == (raw if mode == "password-raw" else original)
         os.write(master, b"\n")
         line(process, "OK")
         assert process.wait(timeout=10) == 0
-        assert termios.tcgetattr(slave) == original, (termios.tcgetattr(slave), original)
+        assert settings(slave) == original, (settings(slave), original)
     finally:
         if process.poll() is None:
             process.kill()
@@ -74,7 +83,7 @@ def terminal_test(executable, mode):
 
 def password_edge_test(executable, mode):
     master, slave = pty.openpty()
-    original = termios.tcgetattr(slave)
+    original = settings(slave)
     if (mode == "password-error"):
         fcntl.fcntl(slave, fcntl.F_SETFL, os.O_NONBLOCK)
     process = subprocess.Popen([executable, mode], stdin=slave, stdout=subprocess.PIPE, bufsize=0)
@@ -87,7 +96,7 @@ def password_edge_test(executable, mode):
             os.write(master, b"\x04")
         line(process, "OK")
         assert process.wait(timeout=10) == 0
-        assert termios.tcgetattr(slave) == original
+        assert settings(slave) == original, (settings(slave), original)
     finally:
         if process.poll() is None:
             process.kill()

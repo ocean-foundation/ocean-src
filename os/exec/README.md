@@ -55,7 +55,7 @@ cannot request an empty child environment. Child output capture requires a
 writable system temporary directory and has no output-size bound.
 
 Run `ocean test os/exec` for the Unix utility tests. On Windows, run
-`python os/exec/tests/integration.py /path/to/ocean-c.exe`; it compiles a small
+`python os/exec/tests/integration.py /path/to/ocean.exe`; it compiles a small
 native fixture with Clang and tests arguments, replacement environments, working
 directories, exit codes, and large output without PowerShell startup overhead.
 Each invocation logs START/DONE markers, the command, exit code, and elapsed

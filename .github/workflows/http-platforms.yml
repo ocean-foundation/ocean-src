@@ -2,19 +2,22 @@ name: Native standard-library platforms
 
 on:
   pull_request:
-    paths: ['mem/**', 'net/http/**', 'time/**', 'os/**', 'encoding/json/**', 'internal/**', 'strings/**', 'strconv/**', 'sort/**', 'unicode/**', 'path/**', 'term/**', '.github/workflows/http-platforms.yml', '.github/scripts/**']
+    paths: ['**/*.oc', '**/tests/**', '.github/workflows/http-platforms.yml', '.github/scripts/**']
   push:
     branches: ['**'] # Snapshot tags are verified by the compiler release workflow.
-    paths: ['mem/**', 'net/http/**', 'time/**', 'os/**', 'encoding/json/**', 'internal/**', 'strings/**', 'strconv/**', 'sort/**', 'unicode/**', 'path/**', 'term/**', '.github/workflows/http-platforms.yml', '.github/scripts/**']
+    paths: ['**/*.oc', '**/tests/**', '.github/workflows/http-platforms.yml', '.github/scripts/**']
   workflow_dispatch:
     inputs:
       compiler_ref:
-        description: 'Compiler revision with the native process runtime and libcurl auto-linking'
-        default: 3ada4debdba59915150919b4108833ef07f48947
+        description: 'Ocean compiler revision to build and test'
+        default: 8beb5ae5b071b73f541cffcef799aed0473effcc
         required: true
 
 env:
   PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+  BOOTSTRAP_REPO: ocean-foundation/ocean-c
+  BOOTSTRAP_TAG: nightly-2026.11.22
 
 permissions:
   contents: read
@@ -39,31 +42,30 @@ jobs:
           path: ocean-src
       - uses: actions/checkout@v4
         with:
-          repository: ocean-foundation/ocean-c
-          ref: ${{ inputs.compiler_ref || '3ada4debdba59915150919b4108833ef07f48947' }}
-          submodules: recursive
-          path: ocean-c
+          repository: ocean-foundation/ocean
+          ref: ${{ inputs.compiler_ref || '8beb5ae5b071b73f541cffcef799aed0473effcc' }}
+          path: ocean
       - uses: actions/setup-python@v5
-        if: matrix.os != 'windows'
         with:
           python-version: '3.12'
+      - name: Download bootstrap compiler
+        working-directory: ocean
+        shell: bash
+        run: python .github/scripts/release.py bootstrap --repo "$BOOTSTRAP_REPO" --tag "$BOOTSTRAP_TAG" --target "${{ matrix.arch }}-${{ matrix.os }}"
       - if: matrix.os == 'linux'
         name: Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl gnupg libffi-dev libcurl4-openssl-dev openssl ninja-build
-          python3 -m pip install 'cmake>=4.2,<5'
+          sudo apt-get install -y curl gnupg libffi-dev libcurl4-openssl-dev openssl pkg-config
           bash ocean-src/.github/scripts/install-llvm.sh
       - if: matrix.os == 'macos'
         name: macOS dependencies
         run: |
-          brew install llvm libffi curl openssl@3 ninja
-          python3 -m pip install 'cmake>=4.2,<5'
+          brew install llvm libffi openssl@3 pkgconf
           echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
-          echo "CMAKE_PREFIX_PATH=$(brew --prefix libffi)" >> "$GITHUB_ENV"
-          echo "LIBRARY_PATH=$(brew --prefix libffi)/lib:$(brew --prefix curl)/lib" >> "$GITHUB_ENV"
-          echo "DYLD_LIBRARY_PATH=$(brew --prefix libffi)/lib:$(brew --prefix curl)/lib" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=$(brew --prefix libffi)/lib" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=$(brew --prefix libffi)/lib" >> "$GITHUB_ENV"
       - if: matrix.os == 'windows'
         uses: msys2/setup-msys2@v2
         with:
@@ -71,10 +73,10 @@ jobs:
           update: true
           install: >-
             git
+            make
             ${{ matrix.prefix }}-clang
             ${{ matrix.prefix }}-llvm
-            ${{ matrix.prefix }}-cmake
-            ${{ matrix.prefix }}-ninja
+            ${{ matrix.prefix }}-pkgconf
             ${{ matrix.prefix }}-libffi
             ${{ matrix.prefix }}-curl
             ${{ matrix.prefix }}-openssl
@@ -84,33 +86,38 @@ jobs:
         run: |
           set -euo pipefail
           clang --version
-          [[ "$(clang -dumpversion)" == 23.* ]]
           llvm-ar --version
-          cmake -S ocean-c -B ocean-c/build -G Ninja -DOCEAN_STANDARD_LIBRARY_SOURCE="$GITHUB_WORKSPACE/ocean-src"
-          cmake --build ocean-c/build --target ocean-c -j 4
           export OCEAN_SRC="$GITHUB_WORKSPACE/ocean-src"
-          ocean-c/build/ocean-c test ocean-src/mem ocean-src/net/http ocean-src/time ocean-src/os ocean-src/os/exec ocean-src/os/signal ocean-src/encoding/json ocean-src/internal/native ocean-src/strings ocean-src/strconv ocean-src/sort ocean-src/unicode ocean-src/unicode/utf8 ocean-src/path --notty --timeout 30s
-          python3 ocean-src/net/http/tests/integration.py ocean-c/build/ocean-c
-          python3 ocean-src/net/http/tests/integration.py ocean-c/build/ocean-c --cache "$RUNNER_TEMP/http-cache"
-          OCEAN=ocean-c/build/ocean-c python3 ocean-src/os/signal/tests/test_signal.py
-          python3 ocean-src/os/tests/remove_all/test_remove_all.py ocean-c/build/ocean-c
-          python3 ocean-src/net/http/tests/linking.py ocean-c/build/ocean-c
+          make -C ocean OCEAN=build/bootstrap/ocean
+          ocean/build/ocean test ocean-src/... --notty --timeout 30s
+          python3 ocean-src/net/http/tests/integration.py ocean/build/ocean
+          python3 ocean-src/net/http/tests/integration.py ocean/build/ocean --cache "$RUNNER_TEMP/http-cache"
+          export OCEAN="$PWD/ocean/build/ocean"
+          python3 ocean-src/os/signal/tests/test_signal.py
+          python3 ocean-src/term/tests/test_term.py
+          python3 ocean-src/term/tui/tests/test_tui.py
+          python3 ocean-src/threads/tests/test_threads.py
+          python3 ocean-src/time/tests/test_time.py
+          python3 ocean-src/os/tests/remove_all/test_remove_all.py ocean/build/ocean
+          python3 ocean-src/net/http/tests/linking.py ocean/build/ocean
       - if: matrix.os == 'windows'
         name: Build and test Windows
         shell: msys2 {0}
         run: |
           set -euo pipefail
           clang --version
-          [[ "$(clang -dumpversion)" == 23.* ]]
           llvm-ar --version
-          cmake -S ocean-c -B ocean-c/build -G Ninja -DOCEAN_STANDARD_LIBRARY_SOURCE="$(cygpath -m "$PWD/ocean-src")" -DCMAKE_RC_COMPILER=llvm-rc
-          cmake --build ocean-c/build --target ocean-c -j 4
           export OCEAN_SRC="$(cygpath -m "$PWD/ocean-src")"
-          ocean-c/build/ocean-c.exe test ocean-src/mem ocean-src/net/http ocean-src/time ocean-src/os ocean-src/os/exec ocean-src/os/signal ocean-src/encoding/json ocean-src/internal/native ocean-src/strings ocean-src/strconv ocean-src/sort ocean-src/unicode ocean-src/unicode/utf8 ocean-src/path --notty --timeout 30s
-          python ocean-src/os/exec/tests/integration.py ocean-c/build/ocean-c.exe
-          python ocean-src/net/http/tests/integration.py ocean-c/build/ocean-c.exe
-          python ocean-src/net/http/tests/integration.py ocean-c/build/ocean-c.exe --cache "$(cygpath -m "$RUNNER_TEMP/http-cache")"
-          python ocean-src/net/http/tests/linking.py ocean-c/build/ocean-c.exe
+          if [[ ! -f "$MINGW_PREFIX/bin/pkg-config.exe" ]]; then
+            cp "$MINGW_PREFIX/bin/pkgconf.exe" "$MINGW_PREFIX/bin/pkg-config.exe"
+          fi
+          make -C ocean OCEAN=build/bootstrap/ocean.exe
+          ocean/build/ocean.exe check ocean-src/testing/internal/display
+          ocean/build/ocean.exe test ocean-src/... --notty --timeout 30s
+          python ocean-src/os/exec/tests/integration.py ocean/build/ocean.exe
+          python ocean-src/net/http/tests/integration.py ocean/build/ocean.exe
+          python ocean-src/net/http/tests/integration.py ocean/build/ocean.exe --cache "$(cygpath -m "$RUNNER_TEMP/http-cache")"
+          python ocean-src/net/http/tests/linking.py ocean/build/ocean.exe
   wasm:
     runs-on: ubuntu-24.04
     name: JavaScript-Wasm and foreign assembly
@@ -120,29 +127,30 @@ jobs:
           path: ocean-src
       - uses: actions/checkout@v4
         with:
-          repository: ocean-foundation/ocean-c
-          ref: ${{ inputs.compiler_ref || '3ada4debdba59915150919b4108833ef07f48947' }}
-          submodules: recursive
-          path: ocean-c
+          repository: ocean-foundation/ocean
+          ref: ${{ inputs.compiler_ref || '8beb5ae5b071b73f541cffcef799aed0473effcc' }}
+          path: ocean
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl gnupg libffi-dev libcurl4-openssl-dev ninja-build
-          python3 -m pip install 'cmake>=4.2,<5'
+          sudo apt-get install -y curl gnupg libffi-dev libcurl4-openssl-dev pkg-config
           bash ocean-src/.github/scripts/install-llvm.sh
       - name: Compile and execute Wasm smoke tests
         run: |
           set -euo pipefail
           clang --version
-          [[ "$(clang -dumpversion)" == 23.* ]]
           llvm-ar --version
-          cmake -S ocean-c -B ocean-c/build -G Ninja -DOCEAN_STANDARD_LIBRARY_SOURCE="$GITHUB_WORKSPACE/ocean-src"
-          cmake --build ocean-c/build --target ocean-c asm_backend_probe -j 4
-          python3 ocean-src/net/http/tests/wasm.py ocean-c/build/ocean-c
-          python3 ocean-src/net/http/tests/assembly.py ocean-c/build/asm_backend_probe "$(command -v clang)"
+          export OCEAN_SRC="$GITHUB_WORKSPACE/ocean-src"
+          (
+            cd ocean
+            python3 .github/scripts/release.py bootstrap --repo "$BOOTSTRAP_REPO" --tag "$BOOTSTRAP_TAG" --target x86_64-linux
+            make OCEAN=build/bootstrap/ocean
+          )
+          python3 ocean-src/net/http/tests/wasm.py ocean/build/ocean
+          python3 ocean-src/net/http/tests/assembly.py ocean/build/ocean "$(command -v clang)"
   riscv64:
     runs-on: ubuntu-24.04
     name: linux-riscv64 (QEMU)
@@ -152,10 +160,12 @@ jobs:
           path: ocean-src
       - uses: actions/checkout@v4
         with:
-          repository: ocean-foundation/ocean-c
-          ref: ${{ inputs.compiler_ref || '3ada4debdba59915150919b4108833ef07f48947' }}
-          submodules: recursive
-          path: ocean-c
+          repository: ocean-foundation/ocean
+          ref: ${{ inputs.compiler_ref || '8beb5ae5b071b73f541cffcef799aed0473effcc' }}
+          path: ocean
+      - name: Download RISC-V bootstrap compiler
+        working-directory: ocean
+        run: python3 .github/scripts/release.py bootstrap --repo "$BOOTSTRAP_REPO" --tag "$BOOTSTRAP_TAG" --target riscv64-linux
       - uses: docker/setup-qemu-action@v3
         with:
           platforms: riscv64
@@ -167,7 +177,7 @@ jobs:
           base_image: --platform=linux/riscv64 riscv64/ubuntu:26.04
           install: |
             apt-get update
-            apt-get install -y clang-21 lld-21 llvm-21 libffi-dev libcurl4-openssl-dev openssl cmake ninja-build python3
+            apt-get install -y clang-21 lld-21 llvm-21 binutils libffi-dev libcurl4-openssl-dev openssl make pkg-config python3
           run: |
             set -eu
             mkdir -p /tmp/ocean-tools
@@ -175,9 +185,8 @@ jobs:
             export PATH="/tmp/ocean-tools:$PATH" PYTHONUTF8=1
             export OCEAN_HTTP_BUILD_TIMEOUT=900
             clang --version
-            cmake -S ocean-c -B ocean-c/build -G Ninja -DOCEAN_STANDARD_LIBRARY_SOURCE="$PWD/ocean-src"
-            cmake --build ocean-c/build --target ocean-c -j 4
             export OCEAN_SRC="$PWD/ocean-src"
-            ocean-c/build/ocean-c test ocean-src/mem ocean-src/net/http ocean-src/time ocean-src/os ocean-src/os/exec ocean-src/os/signal ocean-src/encoding/json ocean-src/internal/native ocean-src/strings ocean-src/strconv ocean-src/sort ocean-src/unicode ocean-src/unicode/utf8 ocean-src/path --notty --timeout 60s
-            OCEAN_HTTP_TIMING_SCALE=5 python3 ocean-src/net/http/tests/integration.py ocean-c/build/ocean-c
-            python3 ocean-src/net/http/tests/linking.py ocean-c/build/ocean-c
+            make -C ocean OCEAN=build/bootstrap/ocean
+            ocean/build/ocean test ocean-src/... --notty --timeout 60s
+            OCEAN_HTTP_TIMING_SCALE=5 python3 ocean-src/net/http/tests/integration.py ocean/build/ocean
+            python3 ocean-src/net/http/tests/linking.py ocean/build/ocean

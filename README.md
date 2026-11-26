@@ -1,10 +1,10 @@
 # Ocean-src
 
 The standard library for the [Ocean programming language](https://ocean-lang.dev).
-Use this source tree with the matching `ocean-c` compiler (`OCEAN_SRC` selects it).
+Use this source tree with the matching `ocean` compiler (`OCEAN_SRC` selects it).
 It is loaded as Ocean source; do not precompile it.
 
-Nightly releases are coordinated by `ocean-c` every day at 00:00 UTC using both
+Nightly releases are coordinated by the `ocean` compiler repository every day at 00:00 UTC using both
 repositories' `main` commits. A change in either repository creates matching
 `nightly-YYYY.MM.DD` tags dated for the preceding UTC day and builds the release
 (for example, the December 1 run is named for November 30). Unchanged sources skip builds
@@ -315,9 +315,8 @@ architectures; portable Ocean routines cover the remaining paths.
 These packages use `Result<T>` for recoverable errors. See each package's README
 for its supported subset of the Go APIs. `io.FormatFloat(value float) string`
 provides locale-independent round-trip float formatting used by JSON.
-The matching compiler needs interface-array/enum ownership fixes, libcurl
-linking (including object-cache hits), and native/Wasm source-file selection. Run `ocean test ./...` to run all
-standard-library tests; HTTP tests need loopback socket access.
+Run `OCEAN_SRC="$PWD" ocean test ./... --notty` from this checkout. The HTTP
+integration tests use local loopback servers. [HTTP validation](net/http/README.md#validation)
 
 ## Files, directories and the environment
 
