@@ -15,7 +15,6 @@ on:
 
 env:
   PYTHONUTF8: "1"
-  GH_TOKEN: ${{ github.token }}
   BOOTSTRAP_REPO: ocean-foundation/ocean-c
   BOOTSTRAP_TAG: nightly-2026.11.22
 
@@ -39,9 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           path: ocean-src
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: ocean-foundation/ocean
           ref: ${{ inputs.compiler_ref || '8beb5ae5b071b73f541cffcef799aed0473effcc' }}
           path: ocean
@@ -51,6 +52,8 @@ jobs:
       - name: Download bootstrap compiler
         working-directory: ocean
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python .github/scripts/release.py bootstrap --repo "$BOOTSTRAP_REPO" --tag "$BOOTSTRAP_TAG" --target "${{ matrix.arch }}-${{ matrix.os }}"
       - if: matrix.os == 'linux'
         name: Linux dependencies
@@ -124,9 +127,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           path: ocean-src
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: ocean-foundation/ocean
           ref: ${{ inputs.compiler_ref || '8beb5ae5b071b73f541cffcef799aed0473effcc' }}
           path: ocean
@@ -138,17 +143,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y curl gnupg libffi-dev libcurl4-openssl-dev pkg-config
           bash ocean-src/.github/scripts/install-llvm.sh
+      - name: Download bootstrap compiler
+        working-directory: ocean
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/release.py bootstrap --repo "$BOOTSTRAP_REPO" --tag "$BOOTSTRAP_TAG" --target x86_64-linux
       - name: Compile and execute Wasm smoke tests
         run: |
           set -euo pipefail
           clang --version
           llvm-ar --version
           export OCEAN_SRC="$GITHUB_WORKSPACE/ocean-src"
-          (
-            cd ocean
-            python3 .github/scripts/release.py bootstrap --repo "$BOOTSTRAP_REPO" --tag "$BOOTSTRAP_TAG" --target x86_64-linux
-            make OCEAN=build/bootstrap/ocean
-          )
+          make -C ocean OCEAN=build/bootstrap/ocean
           python3 ocean-src/net/http/tests/wasm.py ocean/build/ocean
           python3 ocean-src/net/http/tests/assembly.py ocean/build/ocean "$(command -v clang)"
   riscv64:
@@ -157,14 +163,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           path: ocean-src
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: ocean-foundation/ocean
           ref: ${{ inputs.compiler_ref || '8beb5ae5b071b73f541cffcef799aed0473effcc' }}
           path: ocean
       - name: Download RISC-V bootstrap compiler
         working-directory: ocean
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 .github/scripts/release.py bootstrap --repo "$BOOTSTRAP_REPO" --tag "$BOOTSTRAP_TAG" --target riscv64-linux
       - uses: docker/setup-qemu-action@v3
         with:
